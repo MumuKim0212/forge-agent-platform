@@ -1,0 +1,162 @@
+name: Backend suite
+description: >-
+  Python + Docker preparation, dependency install and the whole backend pytest
+  run, shared by the pinned CI job (ci.yml) and the scheduled drift job
+  (backend-drift.yml) so the two cannot diverge. Expects
+  the repository to be checked out already.
+
+inputs:
+  pinned:
+    description: >-
+      "true" installs with backend/constraints.txt (exactly the committed
+      versions; the push/PR gate). "false" installs the latest versions
+      pyproject.toml allows and prints what moved before pytest runs (the
+      drift probe).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7.0.0
+      with:
+        # Floating the 3.14 minor line, not the exact 3.14.3 patch every
+        # developer happens to have locally today: this is the series
+        # every developer actually runs (pyproject.toml's ">=3.11" floor
+        # is a compatibility claim nobody's toolchain tests), so CI stays
+        # aligned with what's really being verified day to day, without
+        # going red on a routine patch release the way pinning the exact
+        # patch would. (constraints.txt was generated on the 3.14 minor
+        # line too; its header records the patch.)
+        python-version: "3.14"
+        # The drift job must resolve against what PyPI serves now, so it
+        # takes no pip cache; the pinned job caches, keyed on both files.
+        cache: ${{ inputs.pinned == 'true' && 'pip' || '' }}
+        cache-dependency-path: |
+          backend/pyproject.toml
+          backend/constraints.txt
+
+    - name: Confirm Docker engine is available
+      # Loud and immediate if this ever isn't true, rather than 51
+      # Docker-dependent tests quietly turning into clean skips and the
+      # run still reading green — the exact blind spot.
+      shell: bash
+      run: |
+        docker version
+        docker info
+
+    - name: Pre-pull the images the platform creates containers from directly
+      # services/sandbox_runner.py's _provision() calls
+      # self._client.containers.create(**create_kwargs) — NOT
+      # containers.run(). docker-py's ContainerCollection.create() does
+      # not auto-pull a missing image (only .run() catches
+      # docker.errors.ImageNotFound and pulls; confirmed by reading
+      # docker/models/containers.py in the installed package). Every
+      # other Docker-dependent test either builds its own image locally
+      # first (images.build() auto-pulls its FROM base — no action
+      # needed for the alpine:3.19 / python:3.11-slim images those
+      # Dockerfiles reference) or goes through deploy/preview/proxy
+      # managers' containers.run() call sites (also auto-pull), or pulls
+      # explicitly itself (test_deploy_traefik_integration.py's
+      # traefik:v3.6 fixture). python:3.11-slim is one image CI has to fetch
+      # up front, or test_sandbox_runner_integration.py fails with
+      # ImageNotFound instead of exercising SandboxRunner.run() at all.
+      #
+      # The other is the service Redis image (Settings.service_redis_image):
+      # service_data.create_isolated_redis() also goes through
+      # containers.create() (it detaches the default bridge before start),
+      # so a deploy or preview that provisions a Redis fails with
+      # ImageNotFound on a runner that never pulled it. redis:7-alpine is
+      # pulled too: the two anonymous-volume tests (test_preview_data_
+      # integration.py, test_service_data_deprovision_integration.py) switch
+      # service_redis_image to it on purpose, because unlike 8-alpine it
+      # declares `VOLUME /data`.
+      shell: bash
+      run: |
+        docker pull python:3.11-slim
+        docker pull redis:8-alpine
+        docker pull redis:7-alpine
+
+    - name: Build images required by the proxy/executor integration tests
+      # Skip-count investigation:
+      # test_proxy_container_integration.py and
+      # test_sandbox_build_executor_integration.py skip (not fail) when
+      # these two images aren't present locally — a fresh checkout never
+      # has them. Built from the exact commands already documented in
+      # each test file's own module docstring; nothing new invented here.
+      #
+      # forge-agent-sandbox:latest (the real image, with the Claude Code
+      # CLI + Node — much slower to build) is deliberately NOT built here
+      # (platform owner's decision, 2026-10-05: it is a local-only gate).
+      # Two files consume it and both skip on CI because of that:
+      #   - tests/test_real_key_smoke.py, which would skip anyway:
+      #     _real_key_and_images_available() checks ANTHROPIC_API_KEY first
+      #     and returns False before it ever looks at Docker or images;
+      #   - tests/test_agent_tool_capture_integration.py (9 tests), whose
+      #     module-level skipif is "Docker and forge-agent-sandbox:latest,
+      #     forge-llm-proxy:latest, python:3.11-slim all present" -- the
+      #     agent image is the one missing, so all 9 skip on every CI run.
+      # `-rs` on the pytest step below prints those skip reasons in the log,
+      # so a green run can no longer hide them.
+      shell: bash
+      working-directory: backend
+      run: |
+        docker build -t forge-llm-proxy:latest -f docker/llm-proxy/Dockerfile .
+        docker build -t forge-agent-sandbox-stub:latest docker/agent-sandbox-stub
+
+    - name: Install backend dependencies (pinned by constraints.txt)
+      if: inputs.pinned == 'true'
+      # exactly the versions committed in backend/constraints.txt,
+      # so a red run means the commit broke something, not that a library
+      # moved. Updating the pins is its own deliberate commit.
+      shell: bash
+      working-directory: backend
+      run: python -m pip install -c constraints.txt -e ".[dev]"
+
+    - name: Install backend dependencies (latest allowed, no constraints)
+      if: inputs.pinned != 'true'
+      # The drift probe: what a fresh install resolves today.
+      shell: bash
+      working-directory: backend
+      run: python -m pip install -e ".[dev]"
+
+    - name: What moved since constraints.txt
+      if: inputs.pinned != 'true'
+      # Makes a red drift run findable: the full resolved set, then a diff
+      # against the committed pins ("<" = pinned, ">" = resolved now).
+      # Windows-only packages are not in the file and are not installed
+      # here; anything on a `>` line alone is a new transitive dependency.
+      # Never fails the step: the diff exits 1 whenever anything moved.
+      shell: bash
+      working-directory: backend
+      run: |
+        echo "::group::pip list"
+        python -m pip list
+        echo "::endgroup::"
+        grep -Ev '^\s*(#|$)' constraints.txt | LC_ALL=C sort > "$RUNNER_TEMP/pinned.txt"
+        python -m pip freeze --exclude-editable | LC_ALL=C sort > "$RUNNER_TEMP/resolved.txt"
+        echo "Diff against constraints.txt (< pinned, > resolved just now):"
+        diff -u "$RUNNER_TEMP/pinned.txt" "$RUNNER_TEMP/resolved.txt" || true
+
+    - name: pytest
+      # Same invocation test.ps1 uses (`python -m pytest -q`), run
+      # through the module so it resolves against this step's active
+      # interpreter rather than whatever `pytest` is first on PATH.
+      # `-rs` adds the skip reasons to the summary: 9 tests skip
+      # by design on CI (see the image-build step above) and the log
+      # should say so rather than leave a count to be reconciled.
+      #
+      # test_real_key_smoke.py requires ANTHROPIC_API_KEY, GITHUB_TOKEN,
+      # and GITHUB_ORG. None are set anywhere in this job, and none of
+      # the three are injected automatically by the Actions runtime
+      # either (checked against GitHub's own default-environment-
+      # variables reference: GITHUB_TOKEN is a secret that must be
+      # explicitly wired into `env:` to become a process env var, which
+      # this workflow does not do; GITHUB_ORG and ANTHROPIC_API_KEY are
+      # not platform-provided at all). That test's skip check reads
+      # os.environ directly and short-circuits on the first missing
+      # variable, before it ever touches Docker — it stays a clean skip
+      # here by construction, not by any special-casing in this file.
+      shell: bash
+      working-directory: backend
+      run: python -m pytest -q -rs

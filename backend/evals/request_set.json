@@ -1,0 +1,44 @@
+{
+  "version": 3,
+  "description": "Eval request set v3. Five small create-type cases on the generic web-tool template, sized to fit one run of EVAL_RUN_BUDGET_USD on the default model. v2 added `unprompted-screen`: a plain-language need that never mentions a page, so it measures the system prompt and not the request. v3 adds `room-bookings`: a booking list whose own words, a start and an end time, can tempt an unquoted reserved-word column; the case never mentions SQL or repair, and whether the loop ran is read from the case's repair_attempts, not from a pass. Any change to a case or a check bumps `version`; results are compared only within one version.",
+  "cases": [
+    {
+      "id": "static-page",
+      "request": "Change the home page. The route GET / must return an HTML page (content type text/html) whose body contains the exact text \"Forge Eval Static Page\" inside an <h1> heading, and a short paragraph below it. Keep GET /healthz working.",
+      "checks": [
+        {"method": "GET", "path": "/", "expect_status": 200, "expect_substring": "Forge Eval Static Page"}
+      ]
+    },
+    {
+      "id": "database-page",
+      "request": "Change the home page. The route GET / must return an HTML page (content type text/html) that reads the existing `items` table through the service's own database connection and shows how many rows it holds, as the exact text \"Stored items: <n>\" (for example \"Stored items: 0\"). Keep GET /healthz working and do not change the table.",
+      "checks": [
+        {"method": "GET", "path": "/", "expect_status": 200, "expect_substring": "Stored items: "}
+      ]
+    },
+    {
+      "id": "write-then-read-form",
+      "request": "Add a small notes feature using the existing `items` table (its `value` column holds the note text). Add POST /notes, which takes the note text as the query parameter `text`, stores it, and returns JSON that contains the stored text. Add GET /notes, which returns a JSON list of every stored note text. Keep GET /healthz working.",
+      "checks": [
+        {"method": "POST", "path": "/notes?text=forge-eval-note-7431", "expect_status": 200, "expect_substring": "forge-eval-note-7431"},
+        {"method": "GET", "path": "/notes", "expect_status": 200, "expect_substring": "forge-eval-note-7431"}
+      ]
+    },
+    {
+      "id": "unprompted-screen",
+      "request": "Our team of eight orders lunch together every Friday. I want one place where each person can put in what they want to eat, and where I can see everyone's orders in one list, so that I can read it out to the restaurant. Call it \"Friday Lunch Tally\".",
+      "checks": [
+        {"method": "GET", "path": "/", "expect_status": 200, "expect_substring": "Friday Lunch Tally"},
+        {"method": "GET", "path": "/", "expect_status": 200, "expect_substring": "<html"}
+      ]
+    },
+    {
+      "id": "room-bookings",
+      "request": "Two meeting rooms in our office keep getting double-booked, so I want a simple booking list. Each booking has a room, a start time and an end time. Add POST /bookings, which takes the room, the start time and the end time as the query parameters `room`, `start` and `end` (times look like 09:00), saves the booking, and returns the saved booking as JSON. Add GET /bookings, which returns the list of every saved booking as JSON, each with its room, start and end. Keep GET /healthz working.",
+      "checks": [
+        {"method": "POST", "path": "/bookings?room=forge-eval-room-7431&start=09:00&end=10:00", "expect_status": 200, "expect_substring": "forge-eval-room-7431"},
+        {"method": "GET", "path": "/bookings", "expect_status": 200, "expect_substring": "forge-eval-room-7431"}
+      ]
+    }
+  ]
+}

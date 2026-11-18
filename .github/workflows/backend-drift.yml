@@ -1,0 +1,42 @@
+name: Backend drift
+
+# The push/PR gate (ci.yml) installs the versions
+# committed in backend/constraints.txt. This workflow answers the other
+# question -- "does the newest set pyproject.toml allows still pass?" -- by
+# installing WITHOUT the constraints and running the same suite, weekly and
+# on demand.
+#
+# A red run here is information, not a verdict on any commit: a newer
+# version breaks us, so fix the code or tighten the bound before the next
+# bump of constraints.txt. It can never block anything: it is its own
+# workflow, it has no push/pull_request trigger, and nothing requires it.
+# The failing run prints `pip list` and a diff against constraints.txt
+# before pytest, so the package that moved is named in the log.
+#
+# GitHub only runs `schedule` triggers from the DEFAULT branch, and disables
+# them after 60 days without repository activity (re-enable in the Actions
+# tab). `workflow_dispatch` (Actions -> Backend drift -> Run workflow) works
+# the same way and is the way to try it first.
+
+"on":
+  schedule:
+    # Mondays 05:00 UTC.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Backend drift (latest allowed versions, non-blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Backend suite on the latest allowed dependency set
+        uses: ./.github/actions/backend-suite
+        with:
+          pinned: "false"

@@ -1,0 +1,71 @@
+[project]
+name = "forge-backend"
+version = "0.1.0"
+description = "Forge platform skeleton backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "python-multipart>=0.0.9",
+    "docker>=7.0",
+    # httpx is a runtime dep now, not just test tooling — the LLM
+    # egress proxy (services/llm_proxy.py) forwards requests with it, and
+    # services/proxy_container.py talks to the proxy's admin API with it.
+    "httpx>=0.27",
+    # ADR 0018: OIDC ID-token signature verification (JWKS-backed).
+    # A protocol library, not a vendor SDK — the "no IdP-specific code" rule
+    # is about Entra/Okta SDKs, not about JWT primitives, and hand-rolling
+    # signature verification is the one thing services/oidc.py must not do.
+    # The `crypto` extra pulls in `cryptography` for RSA/EC verification.
+    "pyjwt[crypto]>=2.9",
+    # ADR 0022 §3: password hashing for `local` auth mode. A
+    # purpose-built password hash function, not a vendor SDK and not hand-
+    # rolled — the one thing `services/passwords.py` must not do itself.
+    "bcrypt>=4.1",
+    # `zoneinfo` has no bundled time-zone database, and Windows (the
+    # documented dev platform) ships none at
+    # the OS level either — so `ZoneInfo(settings.platform_timezone)` cannot
+    # resolve even "UTC" without this. Data only, no code: the PSF's packaging
+    # of the IANA database, which is the supported remedy for exactly this.
+    "tzdata>=2024.1",
+    # ADR 0023: the platform's OWN admin connection to the shared
+    # service Postgres (CREATE DATABASE / CREATE ROLE / GRANT, via
+    # `services/service_data.py`) — never used by a generated service, which
+    # picks its own driver later. psycopg (v3), not psycopg2: SQLAlchemy's
+    # bare `postgresql://` scheme resolves to psycopg2 by default, so
+    # `service_data.py` rewrites every admin URL onto `postgresql+psycopg`
+    # explicitly rather than depending on that default.
+    "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    # `redis` is the template's own dependency (`templates/generic-
+    # webtool/Dockerfile` pins `redis>=5.0`), not a platform backend one --
+    # the platform never talks to a service's Redis directly, only manages
+    # the container via the Docker SDK. Installed here only so
+    # `test_cache_module_import_fails_when_redis_url_unset` (which loads the
+    # template's `cache.py` by path) can reach its real assertion locally
+    # and on CI, rather than skip everywhere and only fail on a prod
+    # install once the template actually imports something new. `app/`
+    # itself must never import `redis` -- pinned by
+    # `test_config.py::test_app_never_imports_redis`.
+    "redis>=5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires a real Docker Engine; skipped cleanly when unavailable.",
+]

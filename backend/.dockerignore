@@ -1,0 +1,35 @@
+# Keeps secrets and state out of every image build context.
+# Every `docker build` in this repo that uses backend/ as its context (the llm-proxy image:
+# `docker build -t forge-llm-proxy:latest -f docker/llm-proxy/Dockerfile .`) sends the whole
+# directory to the daemon, and backend/ holds the real LLM key in `.env`.
+# The llm-proxy image copies only `constraints.txt` and `app/`; nothing below is needed by any image.
+# tests/test_dockerignore.py pins this file.
+
+# A .dockerignore pattern is anchored at the context root (unlike .gitignore, `*.db` does NOT match
+# `tests/x.db`), so the patterns that must hold at any depth start with `**/`.
+
+# Credentials and operator configuration
+**/.env
+**/.env.*
+**/*.env
+
+# State: the platform DB (and SQLite's sidecar files), service-database dumps, every service's repo
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+local-git/
+backups/
+
+# Environments, caches, logs, build output
+.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+**/*.log
+.git/

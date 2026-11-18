@@ -1,0 +1,11 @@
+# Line endings: the generated-service template skeleton is LF on every host.
+# Without this, a Windows checkout (core.autocrlf=true) writes CRLF files that the
+# agent then rewrites as LF, so a small edit shows up as a whole-file rewrite in a
+# build's change set and diff. Scoped to the templates on purpose; the
+# rest of the repo keeps the host default.
+backend/templates/** text eol=lf
+# Linux install kit: units and scripts are read by systemd and bash, so CRLF breaks
+# them. LF on every host.
+deploy/linux/** text eol=lf
+# Windows batch files: cmd mis-parses labels in LF files, so CRLF on every host.
+*.bat text eol=crlf

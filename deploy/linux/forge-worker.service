@@ -1,0 +1,36 @@
+# Forge platform worker (builds, deployments, reconciler).
+#
+# ONE worker per installation (ADR 0038): never enable a second copy of this
+# unit, and never run `python -m app.worker` by hand while it is active. Its
+# start is destructive by design (it fails builds the previous worker left in
+# flight and removes their containers, ADR 0037); a requested stop is clean.
+#
+# Paths and user as in forge-api.service.
+[Unit]
+Description=Forge platform worker
+After=network-online.target docker.service postgresql.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+# docker group: root-equivalent on this host (README.md §User and permissions).
+SupplementaryGroups=docker
+WorkingDirectory=/opt/forge/backend
+EnvironmentFile=/opt/forge/backend/.env
+ExecStart=/opt/forge/backend/.venv/bin/python -m app.worker
+Restart=on-failure
+RestartSec=10
+# On SIGTERM the worker stops claiming, tears down the build or deployment in
+# flight (container removal, status write) and exits 0, releasing its lease. The
+# timeout is a ceiling for that teardown; a SIGKILL after it is recovered by the
+# next start (recover_orphaned_rows, the reconciler, the 60 s lease wait).
+KillSignal=SIGTERM
+TimeoutStopSec=120
+NoNewPrivileges=true
+# No PrivateTmp / ProtectSystem: workspaces are bind-mounted by the Docker daemon.
+
+[Install]
+WantedBy=multi-user.target

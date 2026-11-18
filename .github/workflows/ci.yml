@@ -1,0 +1,96 @@
+name: CI
+
+# both suites, on every push and PR, with the Docker engine
+# available. Each step exists to close a specific gap —
+# most of them found by not
+# assuming a fresh checkout
+# behaves like a long-lived dev machine.
+
+# Quoted key: unquoted `on:` is valid GitHub Actions syntax (and by far the
+# more common style in the wild) — GitHub's own parser treats it as the
+# trigger key correctly. It's quoted here only so this file's own
+# validation step (`yaml.safe_load`, YAML 1.1 rules) resolves it as the
+# string "on" instead of the boolean `True`, letting that validation
+# actually check the key I mean rather than working around a false
+# negative from the tool. No behavioural difference either way.
+"on":
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (pytest, Docker engine up)
+    # Explicit OS version, not `ubuntu-latest`: the `-latest` label migrates
+    # to a new Ubuntu release over a 1-2 month rolling window without
+    # warning, which could silently swap the Docker/cgroup version this
+    # workflow was validated against (cgroup v2 behaviour was measured
+    # specifically). Also the closest available match to ADR 0002's single
+    # Linux production host, ahead of any Windows-hosted runner.
+    runs-on: ubuntu-24.04
+    env:
+      # the repo-wide guard test (tests/test_no_raw_bidi_controls.py) needs the git
+      # checkout. Without this it SKIPS when it finds none, and a skip on CI is a guard that
+      # has quietly stopped guarding; with it, "no checkout" is a failure. Job-level `env`
+      # reaches the steps of the composite action below.
+      FORGE_REQUIRE_REPO_GUARD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      # Everything between checkout and the end of the suite lives in one
+      # composite action shared with the scheduled drift job
+      # (backend-drift.yml), so the two cannot diverge.
+      # The steps themselves -- and the reasons for each -- are in
+      # .github/actions/backend-suite/action.yml. This job runs them pinned:
+      # `pip install -c constraints.txt`, i.e. exactly the committed versions.
+      - name: Backend suite on the pinned dependency set
+        uses: ./.github/actions/backend-suite
+        with:
+          pinned: "true"
+
+  frontend:
+    name: Frontend (vitest, tsc -b, vite build)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          # Same reasoning as the backend's Python pin: float the major
+          # line every developer runs (local is 22.18.0) instead of the
+          # exact patch, so CI matches real developer toolchains without
+          # going red on a routine Node point release.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        # npm ci, not npm install: this is always a fresh checkout with no
+        # node_modules to reuse, and ci's lockfile-exact install is the
+        # right default for CI even though test.ps1's local convenience
+        # path uses `npm install` (only when node_modules is absent at
+        # all). Same lockfile, same resulting versions either way.
+        working-directory: frontend
+        run: npm ci
+
+      - name: tsc -b
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: vitest
+        working-directory: frontend
+        run: npm test
+
+      - name: vite build
+        # Not run by test.ps1 today, but required explicitly by this
+        # task's acceptance criteria and matches the stated baseline (71
+        # modules, clean). tsc -b already ran as its own step above, so
+        # this step runs vite build directly rather than through `npm run
+        # build` (which would re-run tsc -b a second time for no benefit).
+        working-directory: frontend
+        run: npx vite build

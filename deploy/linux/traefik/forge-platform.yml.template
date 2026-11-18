@@ -1,0 +1,38 @@
+# Reference Traefik dynamic configuration (file provider) for the platform's own
+# origin. run-traefik.sh renders this file into
+# $FORGE_TRAEFIK_CONF/dynamic/forge-platform.yml, replacing the two __PLACEHOLDERS__.
+# Generated services and previews are NOT configured here: they are routed by
+# Docker labels the platform writes (ADR 0002).
+tls:
+  certificates:
+    # The certificate for the platform host AND the wildcard for APPS_BASE_DOMAIN
+    # (generated services live at {project_id}.<APPS_BASE_DOMAIN>, previews at
+    # preview--{project_id}.<APPS_BASE_DOMAIN>). Paths are inside the container;
+    # run-traefik.sh mounts $FORGE_CERT_DIR there read-only.
+    - certFile: /certs/tls.crt
+      keyFile: /certs/tls.key
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/tls.crt
+        keyFile: /certs/tls.key
+
+http:
+  routers:
+    forge-platform:
+      rule: "Host(`__PLATFORM_HOST__`)"
+      entryPoints:
+        - websecure
+      service: forge-platform
+      tls: {}
+      # ACME instead of the static certificate: define the resolver in Traefik's
+      # static configuration (--certificatesresolvers.<name>.acme.*), then name
+      # it here and set TRAEFIK_CERT_RESOLVER=<name> in backend/.env:
+      #   tls:
+      #     certResolver: <your-resolver>
+  services:
+    forge-platform:
+      loadBalancer:
+        servers:
+          # The host API over the Docker host gateway (plain http on this hop).
+          - url: "http://__API_ADDR__"

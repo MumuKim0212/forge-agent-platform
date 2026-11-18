@@ -1,0 +1,47 @@
+# Forge platform API (uvicorn).
+#
+# Install: copy to /etc/systemd/system/. The paths below assume the repo is
+# checked out at /opt/forge and the service user is `forge` (see README.md); if
+# yours differ, change User=, Group=, WorkingDirectory=, EnvironmentFile= and
+# ExecStart= together.
+#
+# The unit never runs a migration: `alembic upgrade head` is an explicit
+# install/upgrade step and the API refuses to start on a database
+# that is not at the head.
+[Unit]
+Description=Forge platform API
+After=network-online.target docker.service postgresql.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+# docker group: root-equivalent on this host (README.md §User and permissions).
+SupplementaryGroups=docker
+# .env and relative paths (local-git, backups, dist) resolve from backend/.
+WorkingDirectory=/opt/forge/backend
+# systemd reads this file too: one KEY=value per line, no trailing "# comment"
+# on a value line (systemd would keep it as part of the value).
+EnvironmentFile=/opt/forge/backend/.env
+# Traefik reaches this process over the Docker bridge gateway
+# (host.docker.internal = host-gateway), not over loopback, so the API binds the
+# docker0 address. Plain HTTP on that hop is intended (TRAEFIK_FORWARD_AUTH_SCHEME
+# defaults to http). 172.17.0.1 is docker0 as pinned by "bip" in daemon.json
+# (README step 1.3); without that, docker0 moves into default-address-pools and
+# this bind fails. Do not bind 0.0.0.0 unless a firewall blocks port 8000 from
+# outside. Override with `systemctl edit forge-api` if your docker0 differs.
+Environment=FORGE_API_BIND=172.17.0.1
+ExecStart=/opt/forge/backend/.venv/bin/python -m uvicorn app.main:app --host ${FORGE_API_BIND} --port 8000
+Restart=on-failure
+RestartSec=5
+# SIGTERM is uvicorn's graceful stop; it has nothing long to drain.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+# Deliberately no PrivateTmp / ProtectSystem: build workspaces are bind-mounted
+# into containers by the Docker daemon, which sees the host filesystem.
+
+[Install]
+WantedBy=multi-user.target

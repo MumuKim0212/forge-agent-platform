@@ -1,0 +1,28 @@
+# Template-owned deploy descriptor (protected path)
+# for the generic web-tool template. Not
+# consumed by image assembly -- `image_assembly.py` builds only from the
+# Dockerfile above, never reads this file -- so the `deploy:` block below
+# is not what actually caps a running deployment's memory/CPU (deploy_
+# manager.py applies `settings.sandbox_memory_limit_mb`/
+# `sandbox_cpu_limit_cores` directly at container-create time). This file
+# exists for two other reasons: it is the manifest an operator running
+# `docker compose up` against a harvested repo standalone would use, and
+# it is the source the policy gate's resource-limits check reads
+# (`app/services/policy_checks.py::check_resource_limits`) -- a real
+# build with no `deploy: resources: limits:` block here was flagged
+# `missing_resource_caps` (medium) on every single build until the block was
+# added.
+# The values below are kept consistent with this template's own
+# `dev`-mode resource caps (`Settings.sandbox_memory_limit_mb` /
+# `sandbox_cpu_limit_cores` defaults) as a reasonable starting point for
+# an operator running this file directly; they are not read at deploy time.
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2048M

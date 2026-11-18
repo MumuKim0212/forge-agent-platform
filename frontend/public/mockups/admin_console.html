@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge - 플랫폼 관리자 콘솔 (Admin Console)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Force Deep Dark Mode explicitly */
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      background-color: #090d16 !important;
+      color: #f1f5f9 !important;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 antialiased min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP ADMIN GLOBAL HEADER (DARK THEME) -->
+  <header class="bg-[#0f172a] border-b border-[#1e293b] sticky top-0 z-40 px-6 py-3 shadow-lg">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <a href="#/admin/prod" class="flex items-center space-x-3 group">
+          <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-black text-xl shadow-md group-hover:scale-105 transition-transform">
+            ⚙
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-lg tracking-tight text-white">Forge Admin</span>
+              <span class="text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-500/40">
+                관리자 전용 콘솔
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 font-mono" id="currentUrlBreadcrumb">경로: /admin/prod</p>
+          </div>
+        </a>
+      </div>
+
+      <!-- Right Action & Link Back to User Portal -->
+      <div class="flex items-center space-x-4">
+        <!-- Direct Link Back to User Portal ( / ) -->
+        <a href="user_portal.html" class="flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1e293b] hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all shadow-sm">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          <span>사용자 포털 ( / ) 로 돌아가기</span>
+        </a>
+
+        <!-- Admin Persona Badge -->
+        <div class="flex items-center space-x-2 pl-2 border-l border-slate-800">
+          <div class="text-right hidden sm:block">
+            <div class="text-xs font-semibold text-white">박관리 (플랫폼운영팀)</div>
+            <div class="text-[11px] text-amber-400 font-mono">권한: 플랫폼 관리자 (Admin)</div>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-xs border border-amber-500/40">
+            박
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col md:flex-row gap-6">
+    
+    <!-- LEFT SIDEBAR NAVIGATION (URL ROUTES - DARK) -->
+    <aside class="w-full md:w-64 flex-shrink-0 space-y-4">
+      <div class="bg-[#0f172a] border border-[#1e293b] rounded-2xl p-4 shadow-md space-y-1">
+        <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 tracking-wider">콘솔 메뉴 라우팅</div>
+        
+        <!-- Route 1: /admin/prod (인프라 및 배포 런타임) -->
+        <a id="nav_prod" href="#/admin/prod" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all">
+          <div class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+            <span>배포 인프라 (/admin/prod)</span>
+          </div>
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        </a>
+
+        <!-- Route 2: /admin/users (사용자 및 권한 관리) -->
+        <a id="nav_users" href="#/admin/users" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all">
+          <div class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <span>사용자 및 권한 (/admin/users)</span>
+          </div>
+          <span id="badgePendingUsers" class="px-1.5 py-0.2 text-[10px] bg-amber-500 text-slate-950 font-bold rounded-full">1</span>
+        </a>
+
+        <!-- Route 3: /admin/approvals (승인 콘솔) -->
+        <a id="nav_approvals" href="#/admin/approvals" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all">
+          <div class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>승인 게이트 (/admin/approvals)</span>
+          </div>
+          <span id="badgePendingApprovals" class="px-1.5 py-0.2 text-[10px] bg-amber-500 text-slate-950 font-bold rounded-full">1</span>
+        </a>
+
+        <!-- Route 4: /admin/quotas (비용 및 쿼터) -->
+        <a id="nav_quotas" href="#/admin/quotas" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all">
+          <div class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>비용 및 쿼터 (/admin/quotas)</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono">$28.4</span>
+        </a>
+
+        <!-- Route 5: /admin/zombie (방치 서비스 관리) -->
+        <a id="nav_zombie" href="#/admin/zombie" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all">
+          <div class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            <span>좀비 정리 (/admin/zombie)</span>
+          </div>
+          <span class="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded-full font-bold">1개</span>
+        </a>
+      </div>
+
+      <!-- Quick Platform Invariant Card -->
+      <div class="bg-[#0f172a] border border-[#1e293b] rounded-2xl p-4 text-xs space-y-2">
+        <div class="font-bold text-slate-300 flex items-center space-x-1.5">
+          <span>🛡️ 플랫폼 보안 원칙 (ADR 0001)</span>
+        </div>
+        <p class="text-slate-400 text-[11px] leading-relaxed">
+          단일 Linux 호스트, Docker 소켓 비공개, L4 컨테이너별 독립 PostgreSQL DB 및 Redis 격리 운영.
+        </p>
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN CONTENT AREA (DARK) -->
+    <section class="flex-1 space-y-6">
+
+      <!-- ======================================================== -->
+      <!-- VIEW 1: /admin/prod (배포 인프라 및 Traefik 라우팅 현황) -->
+      <!-- ======================================================== -->
+      <div id="route_prod" class="space-y-5">
+        <div class="flex items-center justify-between border-b border-[#1e293b] pb-4">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center space-x-2">
+              <span>L4 운영 컨테이너 & 인프라 현황</span>
+              <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono border border-emerald-500/30">/admin/prod</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">검증을 통과하고 현재 단일 Linux 호스트 상에서 안정적으로 구동 중인 L4 서비스 목록입니다.</p>
+          </div>
+          <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-lg font-semibold flex items-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Traefik v3.6.1 + Docker L4 Healthy</span>
+          </span>
+        </div>
+
+        <!-- Infrastructure Summary Stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-[#0f172a] p-4 rounded-xl border border-[#1e293b] shadow-md">
+            <div class="text-xs text-slate-400">활성 L4 컨테이너</div>
+            <div class="text-2xl font-black text-white mt-1">14개</div>
+            <div class="text-[11px] text-emerald-400 mt-1">무중단 트래픽 라우팅 중</div>
+          </div>
+          <div class="bg-[#0f172a] p-4 rounded-xl border border-[#1e293b] shadow-md">
+            <div class="text-xs text-slate-400">공유 Postgres 18 격리 DB</div>
+            <div class="text-2xl font-black text-white mt-1">14개 DB / Role</div>
+            <div class="text-[11px] text-slate-400 mt-1">서비스 간 교차 접근 원천 차단</div>
+          </div>
+          <div class="bg-[#0f172a] p-4 rounded-xl border border-[#1e293b] shadow-md">
+            <div class="text-xs text-slate-400">시크릿 암호화 상태</div>
+            <div class="text-2xl font-black text-emerald-400 mt-1">Fernet at Rest</div>
+            <div class="text-[11px] text-slate-400 mt-1">SERVICE_ENV_ENCRYPTION_KEY 적용</div>
+          </div>
+        </div>
+
+        <!-- Live Deployment Table -->
+        <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl overflow-hidden shadow-md">
+          <div class="p-4 border-b border-[#1e293b] flex justify-between items-center bg-[#0b0f19]">
+            <h3 class="font-bold text-sm text-white">운영 서비스 목록 (L4 Production Containers)</h3>
+            <span class="text-xs text-slate-400">헬스체크 주기: 15초</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="border-b border-[#1e293b] text-slate-400 uppercase font-semibold bg-[#0b0f19]">
+                <tr>
+                  <th class="p-3">서비스명</th>
+                  <th>도메인 라우팅 (Traefik)</th>
+                  <th>컨테이너 ID</th>
+                  <th>격리된 Postgres DB</th>
+                  <th>전용 Redis</th>
+                  <th>헬스 상태</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#1e293b] font-mono text-slate-300">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3 font-sans font-bold text-white">사내 휴가 조회기</td>
+                  <td class="text-indigo-400 font-semibold">vacation.internal.forge</td>
+                  <td>forge-svc-vac-8a9f</td>
+                  <td class="text-emerald-400">svc_vacation_db</td>
+                  <td>forge-redis-vac</td>
+                  <td><span class="px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded font-bold">200 OK</span></td>
+                  <td><button onclick="alert('사내 휴가 조회기 서비스를 이전 안정 버전으로 무중단 롤백합니다.')" class="font-sans px-2.5 py-1 bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded text-slate-200">롤백</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3 font-sans font-bold text-white">월간 정산 엑셀 집계 툴</td>
+                  <td class="text-indigo-400 font-semibold">settle.internal.forge</td>
+                  <td>forge-svc-set-3d11</td>
+                  <td class="text-emerald-400">svc_settle_db</td>
+                  <td>-</td>
+                  <td><span class="px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded font-bold">200 OK</span></td>
+                  <td><button onclick="alert('월간 정산 엑셀 집계 툴 서비스를 이전 안정 버전으로 무중단 롤백합니다.')" class="font-sans px-2.5 py-1 bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded text-slate-200">롤백</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3 font-sans font-bold text-white">고객 CS 키워드 분석 대시보드</td>
+                  <td class="text-indigo-400 font-semibold">cs-keyword.internal.forge</td>
+                  <td>forge-svc-csk-92b0</td>
+                  <td class="text-emerald-400">svc_cs_keyword_db</td>
+                  <td>forge-redis-cs</td>
+                  <td><span class="px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded font-bold">200 OK</span></td>
+                  <td><button onclick="alert('CS 키워드 분석 서비스를 이전 안정 버전으로 무중단 롤백합니다.')" class="font-sans px-2.5 py-1 bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded text-slate-200">롤백</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- VIEW 2: /admin/users (사용자 관리 & 권한 사다리)         -->
+      <!-- ======================================================== -->
+      <div id="route_users" class="hidden space-y-5">
+        <div class="flex items-center justify-between border-b border-[#1e293b] pb-4">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center space-x-2">
+              <span>사내 사용자 및 권한 관리 (Role & Accounts)</span>
+              <span class="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full font-mono border border-amber-500/30">/admin/users</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">
+              신규 회원가입 승인 및 3단계 권한 사다리(<code>Requester &lt; Approver &lt; Admin</code>)를 관리합니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- Section A: Pending Signup Requests (Local Auth Mode) -->
+        <div class="bg-[#0f172a] border border-amber-500/30 rounded-xl p-5 space-y-3 shadow-md">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+              <h3 class="font-bold text-sm text-white">신규 가입 승인 대기열 (Pending Signups)</h3>
+            </div>
+            <span class="text-xs text-slate-400">로컬 인증 모드 (AUTH_MODE=local) 승인 대기 건</span>
+          </div>
+
+          <div id="pendingSignupBox" class="border border-[#1e293b] rounded-lg p-4 bg-[#090d16] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-white text-sm">이신입</span>
+                <span class="text-xs text-slate-400 font-mono">newbie@company.test</span>
+                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-950 text-amber-300 border border-amber-800">승인대기</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-1">부서: 백엔드개발2팀 • 가입 신청일: 2026-09-07 10:15 (사유: 사내 로그 조회기 개발)</div>
+            </div>
+            <div class="flex space-x-2">
+              <button onclick="approveSignup()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition-all">
+                가입 승인 (Requester 부여)
+              </button>
+              <button onclick="rejectSignup()" class="px-3.5 py-1.5 bg-[#1e293b] hover:bg-slate-700 text-rose-400 border border-rose-900/50 text-xs font-bold rounded-lg">
+                반려
+              </button>
+            </div>
+          </div>
+          <div id="pendingSignupEmpty" class="hidden text-center py-4 text-xs text-slate-400">
+            대기 중인 신규 가입 요청이 없습니다.
+          </div>
+        </div>
+
+        <!-- Section B: Role Management Table -->
+        <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl overflow-hidden shadow-md">
+          <div class="p-4 border-b border-[#1e293b] flex justify-between items-center bg-[#0b0f19]">
+            <div>
+              <h3 class="font-bold text-sm text-white">사내 사용자 권한 목록 (User Role Management)</h3>
+              <p class="text-xs text-slate-400">권한 사다리: <strong>Requester(요청자)</strong> &lt; <strong>Approver(배포 승인권자)</strong> &lt; <strong>Admin(전체 관리자)</strong></p>
+            </div>
+            <span class="text-xs bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-1 rounded font-mono">총 5명</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="border-b border-[#1e293b] text-slate-400 uppercase font-semibold bg-[#0b0f19]">
+                <tr>
+                  <th class="p-3">이름 / 이메일</th>
+                  <th>부서</th>
+                  <th>소유 서비스</th>
+                  <th>월간 쿼터 한도</th>
+                  <th>현재 역할</th>
+                  <th>권한 변경 (Role)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#1e293b] text-slate-300" id="userTableBody">
+                
+                <!-- User 1: Park (Admin) -->
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3">
+                    <div class="font-bold text-white">박관리 (본인)</div>
+                    <div class="text-[11px] text-slate-400 font-mono">admin@company.test</div>
+                  </td>
+                  <td>플랫폼운영팀</td>
+                  <td class="font-mono">0개</td>
+                  <td><span class="text-slate-400 font-mono">$100 (기본)</span></td>
+                  <td><span class="px-2 py-0.5 bg-amber-950 text-amber-300 font-bold rounded border border-amber-800">ADMIN</span></td>
+                  <td>
+                    <select onchange="handleRoleChange('박관리', this.value, true)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+                      <option value="admin" selected>ADMIN (관리자)</option>
+                      <option value="approver">APPROVER (승인자)</option>
+                      <option value="requester">REQUESTER (요청자)</option>
+                    </select>
+                  </td>
+                </tr>
+
+                <!-- User 2: Choi (Approver) -->
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3">
+                    <div class="font-bold text-white">최팀장</div>
+                    <div class="text-[11px] text-slate-400 font-mono">lead.choi@company.test</div>
+                  </td>
+                  <td>서비스기획1팀</td>
+                  <td class="font-mono">0개</td>
+                  <td><span class="text-slate-400 font-mono">$100 (기본)</span></td>
+                  <td><span class="px-2 py-0.5 bg-indigo-950 text-indigo-300 font-bold rounded border border-indigo-800">APPROVER</span></td>
+                  <td>
+                    <select onchange="handleRoleChange('최팀장', this.value, false)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+                      <option value="admin">ADMIN (관리자)</option>
+                      <option value="approver" selected>APPROVER (승인자)</option>
+                      <option value="requester">REQUESTER (요청자)</option>
+                    </select>
+                  </td>
+                </tr>
+
+                <!-- User 3: Kim (Requester) -->
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3">
+                    <div class="font-bold text-white">김기획</div>
+                    <div class="text-[11px] text-slate-400 font-mono">planner.kim@company.test</div>
+                  </td>
+                  <td>운영기획팀</td>
+                  <td class="font-mono font-bold text-white">2개</td>
+                  <td><span class="text-amber-400 font-bold font-mono">$150 (오버라이드)</span></td>
+                  <td><span class="px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 font-bold rounded">REQUESTER</span></td>
+                  <td>
+                    <select onchange="handleRoleChange('김기획', this.value, false)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+                      <option value="admin">ADMIN (관리자)</option>
+                      <option value="approver">APPROVER (승인자)</option>
+                      <option value="requester" selected>REQUESTER (요청자)</option>
+                    </select>
+                  </td>
+                </tr>
+
+                <!-- User 4: Jung (Requester) -->
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3">
+                    <div class="font-bold text-white">정재무</div>
+                    <div class="text-[11px] text-slate-400 font-mono">finance.jung@company.test</div>
+                  </td>
+                  <td>재무회계팀</td>
+                  <td class="font-mono font-bold text-white">1개</td>
+                  <td><span class="text-slate-400 font-mono">$100 (기본)</span></td>
+                  <td><span class="px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 font-bold rounded">REQUESTER</span></td>
+                  <td>
+                    <select onchange="handleRoleChange('정재무', this.value, false)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+                      <option value="admin">ADMIN (관리자)</option>
+                      <option value="approver">APPROVER (승인자)</option>
+                      <option value="requester" selected>REQUESTER (요청자)</option>
+                    </select>
+                  </td>
+                </tr>
+
+                <!-- User 5: Kang (Approver) -->
+                <tr class="hover:bg-slate-800/40">
+                  <td class="p-3">
+                    <div class="font-bold text-white">강개발</div>
+                    <div class="text-[11px] text-slate-400 font-mono">dev.kang@company.test</div>
+                  </td>
+                  <td>백엔드개발팀</td>
+                  <td class="font-mono">0개</td>
+                  <td><span class="text-slate-400 font-mono">$100 (기본)</span></td>
+                  <td><span class="px-2 py-0.5 bg-indigo-950 text-indigo-300 font-bold rounded border border-indigo-800">APPROVER</span></td>
+                  <td>
+                    <select onchange="handleRoleChange('강개발', this.value, false)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+                      <option value="admin">ADMIN (관리자)</option>
+                      <option value="approver" selected>APPROVER (승인자)</option>
+                      <option value="requester">REQUESTER (요청자)</option>
+                    </select>
+                  </td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- VIEW 3: /admin/approvals (승인 게이트 콘솔)               -->
+      <!-- ======================================================== -->
+      <div id="route_approvals" class="hidden space-y-5">
+        <div class="flex items-center justify-between border-b border-[#1e293b] pb-4">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center space-x-2">
+              <span>배포 승인 대기 콘솔 (Approval Gate)</span>
+              <span class="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full font-mono border border-amber-500/30">/admin/approvals</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">자가 승인 금지(Self-Approval Ban) 규칙이 적용되어, 본인이 요청한 빌드는 직접 승인할 수 없습니다.</p>
+          </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl overflow-hidden shadow-md">
+          <div id="approvalCard1" class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="space-y-2 flex-1">
+              <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 text-xs font-bold rounded bg-amber-950 text-amber-300 border border-amber-800">
+                  위험도 MEDIUM
+                </span>
+                <span class="font-bold text-base text-white">회의실 비품 및 노트북 대여 관리 (#CR-104)</span>
+              </div>
+              <p class="text-xs text-slate-400">
+                요청자: <strong class="text-slate-200">김기획</strong> • 대상: <strong>신규 배포</strong> • GitHub PR: <span class="text-indigo-400 underline font-mono">#14 Add rental schema</span>
+              </p>
+              
+              <div class="bg-[#090d16] border border-[#1e293b] rounded-lg p-3 text-xs space-y-1">
+                <div class="font-semibold text-slate-300">자동 정책 검사 결과 (Policy Checks 6/6 통과)</div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-slate-400">
+                  <div>✓ 악성 시스템콜: 없음 (Safe)</div>
+                  <div>✓ 시크릿 하드코딩: 없음 (Clean)</div>
+                  <div>✓ 비인가 외부통신: 차단됨 (Deny)</div>
+                  <div class="text-amber-400 font-semibold">⚠ DB DDL: 신규 테이블 생성 감지</div>
+                  <div>✓ 리소스 상한: 메모리 512MB 준수</div>
+                  <div>✓ 임시 Postgres DB: pv_e417 격리 완료</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex sm:flex-col gap-2 flex-shrink-0">
+              <button onclick="alert('프리뷰 URL이 새 탭에서 열립니다.')" class="px-4 py-2 bg-[#1e293b] hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700 text-slate-200">
+                프리뷰 확인 ↗
+              </button>
+              <button onclick="approveCR()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition-all">
+                배포 승인 (Approve)
+              </button>
+              <button onclick="rejectCR()" class="px-4 py-2 bg-rose-950/40 text-rose-400 hover:bg-rose-900/50 text-xs font-bold rounded-lg border border-rose-800/40">
+                반려 (Reject)
+              </button>
+            </div>
+          </div>
+
+          <div id="approvalEmptyState" class="hidden p-8 text-center text-xs text-slate-400">
+            🎉 대기 중인 배포 승인 요청이 없습니다.
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- VIEW 4: /admin/quotas (비용 및 쿼터 관리)                 -->
+      <!-- ======================================================== -->
+      <div id="route_quotas" class="hidden space-y-5">
+        <div class="flex items-center justify-between border-b border-[#1e293b] pb-4">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center space-x-2">
+              <span>비용 및 할당량 관리 (Cost & Quotas)</span>
+              <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full font-mono border border-indigo-500/30">/admin/quotas</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">월간 LLM 토큰 소비량 집계 및 프로젝트별 쿼터 한도(Warn-only Quota)를 관리합니다.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl p-5 space-y-3 shadow-md">
+            <h3 class="font-bold text-sm text-white">이번 달 프로젝트별 빌드 비용 (USD)</h3>
+            <div class="space-y-3 text-xs">
+              <div>
+                <div class="flex justify-between py-1">
+                  <span>사내 휴가 조회기 (김기획)</span>
+                  <span class="font-bold text-white font-mono">$12.40</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2">
+                  <div class="bg-indigo-500 h-2 rounded-full" style="width: 45%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between py-1">
+                  <span>월간 정산 엑셀 집계 툴 (정재무)</span>
+                  <span class="font-bold text-white font-mono">$9.10</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2">
+                  <div class="bg-emerald-500 h-2 rounded-full" style="width: 32%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between py-1">
+                  <span>비품 대여 관리기 (김기획)</span>
+                  <span class="font-bold text-white font-mono">$6.90</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2">
+                  <div class="bg-amber-500 h-2 rounded-full" style="width: 23%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl p-5 space-y-3 shadow-md">
+            <h3 class="font-bold text-sm text-white">플랫폼 쿼터 및 예산 정책</h3>
+            <div class="space-y-2 text-xs font-mono">
+              <div class="flex justify-between p-2.5 bg-[#090d16] rounded-lg border border-[#1e293b]">
+                <span class="font-sans text-slate-300">빌드 1회당 상한</span>
+                <span class="font-bold text-amber-400">200,000 Tokens ($5.00)</span>
+              </div>
+              <div class="flex justify-between p-2.5 bg-[#090d16] rounded-lg border border-[#1e293b]">
+                <span class="font-sans text-slate-300">월간 플랫폼 전체 예산</span>
+                <span class="font-bold text-indigo-400">$100.00 / month</span>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed pt-2">
+              * 쿼터 초과 시 서비스가 중단되는 것이 아니라 관리자 및 소유자에게 경고(Warn-only) 알림이 전달됩니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- VIEW 5: /admin/zombie (좀비 서비스 자동 정리)             -->
+      <!-- ======================================================== -->
+      <div id="route_zombie" class="hidden space-y-5">
+        <div class="flex items-center justify-between border-b border-[#1e293b] pb-4">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center space-x-2">
+              <span>방치된 좀비 서비스 단계적 정리</span>
+              <span class="text-xs bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full font-mono border border-rose-500/30">/admin/zombie</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">90일 이상 트래픽이 없는 미사용 서비스를 감지하여 서버 자원과 데이터베이스를 안전하게 회수합니다.</p>
+          </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#1e293b] rounded-xl p-5 space-y-4 shadow-md">
+          <div class="border border-[#1e293b] bg-[#090d16] p-4 rounded-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="font-bold text-sm text-white">작년도 설문조사 취합기 (v1.0)</div>
+                <div class="text-xs text-slate-400 mt-0.5">마지막 요청: 114일 전 (2026-05-15) • 소유자: 최인사</div>
+              </div>
+              <span class="px-2.5 py-1 text-xs font-semibold bg-rose-950 text-rose-300 rounded-full border border-rose-800">
+                1단계: 컨테이너 정지됨 (Stopped)
+              </span>
+            </div>
+            <div class="text-xs text-slate-400 flex items-center justify-between pt-2 border-t border-[#1e293b]">
+              <span>자동 백업(pg_dump) 후 영구 파기 예정: <strong>6일 뒤</strong></span>
+              <button onclick="alert('소유자 최인사 님에게 서비스 재활성화 확인 메일이 발송되었습니다.')" class="px-3 py-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-200 rounded font-semibold border border-slate-700">
+                소유자 재확인 알림 발송 ✉
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- ROUTING JAVASCRIPT -->
+  <script>
+    const routes = ['/admin/prod', '/admin/users', '/admin/approvals', '/admin/quotas', '/admin/zombie'];
+
+    function handleRouting() {
+      let hash = window.location.hash || '#/admin/prod';
+      let path = hash.replace('#', '');
+      if (!routes.includes(path)) {
+        path = '/admin/prod';
+      }
+
+      // Update breadcrumb text
+      document.getElementById('currentUrlBreadcrumb').innerText = '경로: ' + path;
+
+      // Hide all panels
+      routes.forEach(r => {
+        const routeKey = r.split('/')[2];
+        const panel = document.getElementById('route_' + routeKey);
+        const nav = document.getElementById('nav_' + routeKey);
+        if (panel) panel.classList.add('hidden');
+        if (nav) {
+          nav.className = "flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all";
+        }
+      });
+
+      // Show current panel & activate nav
+      const currentKey = path.split('/')[2];
+      const activePanel = document.getElementById('route_' + currentKey);
+      const activeNav = document.getElementById('nav_' + currentKey);
+      if (activePanel) activePanel.classList.remove('hidden');
+      if (activeNav) {
+        activeNav.className = "flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold text-white bg-[#1e293b] border border-slate-700 shadow-sm transition-all";
+      }
+    }
+
+    window.addEventListener('hashchange', handleRouting);
+    window.addEventListener('load', handleRouting);
+
+    // USER MANAGEMENT FUNCTIONS
+    function approveSignup() {
+      document.getElementById('pendingSignupBox').classList.add('hidden');
+      document.getElementById('pendingSignupEmpty').classList.remove('hidden');
+      document.getElementById('badgePendingUsers').classList.add('hidden');
+      
+      // Append approved user to table
+      const tbody = document.getElementById('userTableBody');
+      const newRow = document.createElement('tr');
+      newRow.className = "hover:bg-slate-800/40 bg-emerald-950/30";
+      newRow.innerHTML = `
+        <td class="p-3">
+          <div class="font-bold text-emerald-400">이신입 (방금 승인됨)</div>
+          <div class="text-[11px] text-slate-400 font-mono">newbie@company.test</div>
+        </td>
+        <td>백엔드개발2팀</td>
+        <td class="font-mono">0개</td>
+        <td><span class="text-slate-400 font-mono">$100 (기본)</span></td>
+        <td><span class="px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 font-bold rounded">REQUESTER</span></td>
+        <td>
+          <select onchange="handleRoleChange('이신입', this.value, false)" class="bg-[#0b0f19] border border-slate-700 text-white rounded px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none">
+            <option value="admin">ADMIN (관리자)</option>
+            <option value="approver">APPROVER (승인자)</option>
+            <option value="requester" selected>REQUESTER (요청자)</option>
+          </select>
+        </td>
+      `;
+      tbody.appendChild(newRow);
+      alert('이신입 님의 가입이 승인되었습니다. REQUESTER 역할이 부여되었습니다.');
+    }
+
+    function rejectSignup() {
+      if (confirm('이 사용자의 가입 신청을 반려하시겠습니까?')) {
+        document.getElementById('pendingSignupBox').classList.add('hidden');
+        document.getElementById('pendingSignupEmpty').classList.remove('hidden');
+        document.getElementById('badgePendingUsers').classList.add('hidden');
+        alert('가입 신청이 반려되었습니다.');
+      }
+    }
+
+    function handleRoleChange(userName, newRole, isSoleAdmin) {
+      if (isSoleAdmin && newRole !== 'admin') {
+        alert('❌ [권한 변경 불가] 시스템의 마지막 ADMIN 사용자는 강등할 수 없습니다.');
+        // Reset to admin
+        event.target.value = 'admin';
+        return;
+      }
+      alert(`[감사 로그 기록] ${userName} 님의 권한이 ${newRole.toUpperCase()} 으로 성공적으로 변경되었습니다.`);
+    }
+
+    function approveCR() {
+      document.getElementById('approvalCard1').classList.add('hidden');
+      document.getElementById('approvalEmptyState').classList.remove('hidden');
+      document.getElementById('badgePendingApprovals').classList.add('hidden');
+      alert('배포가 승인되었습니다! L4 운영 컨테이너로 무중단 스위칭(Zero-downtime deploy)이 시작되었습니다.');
+    }
+
+    function rejectCR() {
+      if (confirm('이 배포 요청을 반려하시겠습니까?')) {
+        document.getElementById('approvalCard1').classList.add('hidden');
+        document.getElementById('approvalEmptyState').classList.remove('hidden');
+        document.getElementById('badgePendingApprovals').classList.add('hidden');
+        alert('배포 요청이 반려되었습니다.');
+      }
+    }
+  </script>
+</body>
+</html>

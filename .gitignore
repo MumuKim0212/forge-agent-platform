@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------
+# Not part of this repository: agent tooling and any working documents.
+# Only the published decision records under docs/decisions/ are tracked.
+# ---------------------------------------------------------------------------
+
+/docs/*
+!/docs/decisions/
+
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+
+# ---------------------------------------------------------------------------
+# Local run artifacts and secrets
+# ---------------------------------------------------------------------------
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.db
+*.db-shm
+*.db-wal
+.env
+.pytest_cache/
+*.egg-info/
+*.log
+
+# 서비스 DB 덤프 (서비스 데이터의 평문 사본)
+backups/
+
+# 로컬 git provider 저장소 (생성된 모든 서비스의 소스, 운영 데이터)
+local-git/
+
+# Node
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+
+# Editors
+.vscode/
+.idea/

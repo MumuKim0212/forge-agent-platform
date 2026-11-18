@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>forge generic-webtool</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; color: #1f2933; }
+  h1 { font-size: 1.5rem; }
+  form { display: flex; gap: 0.5rem; margin: 1rem 0; }
+  input { flex: 1; padding: 0.5rem; font: inherit; }
+  button { padding: 0.5rem 1rem; font: inherit; cursor: pointer; }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  small { color: #616e7c; }
+  #status { color: #b42318; min-height: 1.25rem; }
+</style>
+</head>
+<body>
+<h1>forge generic-webtool</h1>
+<p>This is the template's starter screen. Replace it with the screen your service needs.</p>
+
+<form id="add-form">
+  <input id="value" name="value" type="text" placeholder="Add an item" autocomplete="off" required>
+  <button type="submit">Add</button>
+</form>
+<p id="status" role="status"></p>
+
+<ul id="items"></ul>
+
+<script>
+  // Every URL below is relative (no leading slash) so the page works wherever the
+  // service is mounted. Writes go through fetch with a query parameter, never a form post.
+  var list = document.getElementById("items");
+  var statusLine = document.getElementById("status");
+
+  function render(items) {
+    list.textContent = "";
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      li.textContent = item.value + " ";
+      var when = document.createElement("small");
+      when.textContent = item.created_at;
+      li.appendChild(when);
+      list.appendChild(li);
+    });
+  }
+
+  function load() {
+    return fetch("items")
+      .then(function (response) {
+        if (!response.ok) { throw new Error("HTTP " + response.status); }
+        return response.json();
+      })
+      .then(render);
+  }
+
+  function fail(error) {
+    statusLine.textContent = "Something went wrong: " + error.message;
+  }
+
+  document.getElementById("add-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var input = document.getElementById("value");
+    statusLine.textContent = "";
+    fetch("items?value=" + encodeURIComponent(input.value), { method: "POST" })
+      .then(function (response) {
+        if (!response.ok) { throw new Error("HTTP " + response.status); }
+        input.value = "";
+        return load();
+      })
+      .catch(fail);
+  });
+
+  load().catch(fail);
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+/*
+ * The frontend's styling layer. Tailwind v4 is
+ * CSS-first — this one file, `@tailwindcss/vite`, and nothing else. No
+ * `tailwind.config.js`, no PostCSS config.
+ *
+ * Imported exactly once, from `main.tsx`.
+ */
+@import "tailwindcss";
+
+/*
+ * Dark mode: fires on the OS preference
+ * *or* inside a `[data-theme="dark"]` ancestor — never both required, and
+ * never the mockups' `body { ... !important }` override (that mechanism is not
+ * adopted). Nothing sets the attribute today (it was taken
+ * off the admin console, which now sits in the shared light shell), so the
+ * app only ever matches the media-query branch below and follows the OS with
+ * no markup (b3). The second branch stays for a surface that must force dark
+ * regardless of what the OS reports — the two branches are independent
+ * rules, not a single selector, so either one alone is sufficient.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    @slot;
+  }
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}
+
+/* The dark value of the focus ring, under the same two triggers as the `dark` variant above. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-focus: #818cf8; /* indigo-400 */
+  }
+}
+[data-theme="dark"] {
+  --color-focus: #818cf8;
+}
+
+@theme {
+  /*
+   * Palette (acceptance b1). Values are taken from the mockups; the names
+   * are defined here, since the mockups' own `var(--background)` etc. are
+   * fictional and raw `indigo-600` at every call site
+   * would spell the same "this is the portal's accent colour" fact
+   * differently in every file that needs it.
+   *
+   * Tailwind's own default palette (indigo/amber/emerald/rose/slate — the
+   * mockups use no colour outside these five families) is untouched and
+   * still available as e.g. `bg-indigo-100`; these are semantic aliases on
+   * top of it, not a replacement for it.
+   */
+  --color-accent: #4f46e5; /* user_portal.html's indigo-600 */
+  --color-accent-hover: #4338ca; /* indigo-700 */
+  --color-accent-subtle: #eef2ff; /* indigo-50 */
+  --color-accent-subtle-dark: #1e1b4b; /* indigo-950 */
+  /*
+   * The keyboard focus ring (`components/ui/focusRing.ts` is the only place that names it).
+   * Light: the accent, 6.0:1 on slate-50 and 6.3:1 on white. Dark: indigo-400 (below), 6.8:1 on
+   * slate-950 and 6.0:1 on slate-900; the accent itself was 3.2:1 and 2.8:1 there (WCAG 1.4.11: 3:1).
+   */
+  --color-focus: #4f46e5;
+
+  --color-success: #059669; /* emerald-600, both mockups */
+  --color-success-subtle: #d1fae5; /* emerald-100 */
+  --color-success-strong: #065f46; /* emerald-800: text on success-subtle, 6.8:1 (success itself is 3.3:1) */
+  --color-danger: #e11d48; /* rose-600, both mockups */
+  --color-danger-subtle: #ffe4e6; /* rose-100 */
+  --color-danger-strong: #be123c; /* rose-700: text on danger-subtle, 5.2:1 (danger itself is 3.9:1) */
+  --color-neutral: #64748b; /* slate-500, both mockups */
+
+  /*
+   * Radius and shadow (acceptance b1): named per *use*, not per raw Tailwind
+   * scale step, so a primitive spells `rounded-control` rather than
+   * `rounded-lg` at every call site (the stated reason for
+   * primitives applies to their internal values too). Values match the
+   * mockups' own `rounded-lg`/`rounded-2xl` and `shadow-sm`/`shadow-lg`
+   * usage for controls and cards respectively.
+   */
+  --radius-control: 0.5rem; /* rounded-lg: buttons, inputs, table wrapper */
+  --radius-card: 1rem; /* rounded-2xl: Card, EmptyState */
+  --shadow-control: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* shadow-md */
+
+  /*
+   * Type scale and spacing (acceptance b1): deliberately **not** redeclared
+   * here. Both mockups are written entirely in Tailwind's own default scale
+   * (text-xs..text-3xl, p-2/3/4/6/8, gap-2/3/4) with no custom value
+   * anywhere in either file (grepped both — no arbitrary `text-[...]`,
+   * `p-[...]`, or `gap-[...]` at any call site) — so "values taken from the
+   * mockups" for these two categories means adopting Tailwind's default
+   * scale unchanged, not inventing a second, redundant name for the same
+   * numbers. Only the palette and the radius/shadow aliases above needed
+   * new names.
+   */
+}
+
+@layer base {
+  /*
+   * Acceptance b4: the whole document, not `Layout.tsx` alone — this is
+   * what actually fixes `/login` and `/signup`, which render *outside*
+   * `Layout` (App.tsx) and therefore never inherited its old, now-removed
+   * `fontFamily` declaration. `font-sans` is Tailwind's stock stack
+   * (established fact: no webfont anywhere in either mockup).
+   */
+  html {
+    @apply font-sans;
+    /*
+     * The carried defect: a lone two-syllable Korean word
+     * (e.g. "승인") can wrap between its own syllables, because the CSS
+     * default line-breaking rules treat each Hangul character as
+     * independently breakable. `keep-all` restores whole-word breaking —
+     * a line may still break at a space, just never inside a word — which
+     * is the standard fix for Korean body text and applies to the whole
+     * document (every screen this stylesheet reaches, not only the ones
+     * this task edits). `break-word` keeps a genuinely unbreakable token
+     * (a long URL, an id) from overflowing its container instead.
+     */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  /*
+   * Belt-and-suspenders on top of `keep-all` for the specific defect named
+   * in d5: a button's own label must never wrap onto a second line at any
+   * container width, not merely "not mid-word". `white-space: nowrap` is a
+   * structural guarantee (a nowrap element cannot break internally,
+   * regardless of how narrow its container is) rather than a width sampled
+   * and checked by hand — see the task's `## Result` for what this does and
+   * does not verify without a browser.
+   */
+  button {
+    white-space: nowrap;
+  }
+}
