@@ -588,7 +588,7 @@ class Settings(BaseSettings):
     build_token_budget: int = 200_000
     build_cost_budget_usd: float = 5.0
 
-    # How many times one build may repair its own output after the preview's
+    # ADR 0047: how many times one build may repair its own output after the preview's
     # smoke check measured a failing route. Each is a new single-use sandbox run on the same
     # build, proxy token and budget (so the per-build budget and wall-clock cover all of them).
     # 0 turns the loop off. A value outside 0..3 refuses to start, like the other limits.

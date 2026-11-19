@@ -1,4 +1,4 @@
-"""add builds.repair_attempts
+"""add builds.repair_attempts (ADR 0047)
 
 Revision ID: a7c3e5d19b04
 Revises: f4a9d2c7e163

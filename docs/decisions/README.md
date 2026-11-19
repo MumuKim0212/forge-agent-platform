@@ -32,6 +32,7 @@ If you read three, read these:
 | [0032](0032-harvested-workspace-is-untrusted-input.md) | The harvested workspace is untrusted input |
 | [0035](0035-openai-second-engine-admin-selected.md) | A second agent engine, selected by an admin, with one proxy dialect per engine |
 | [0009](0009-self-modification-code-only.md) | Self-modification is code-level only; no schema changes through natural language |
+| [0047](0047-in-build-repair-from-measured-smoke-failures.md) | A build may repair its own output from measured smoke failures, inside one build and one budget |
 
 ## Preview, approval and deploy
 

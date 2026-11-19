@@ -202,7 +202,7 @@ def compose_intent_text(
     return "\n\n".join(parts)
 
 
-# --- The repair prompt ----------------------------------
+# --- The repair prompt (ADR 0047 §3) ----------------------------------
 #
 # A build whose preview smoke check measured a failing route may run again, on the output it just
 # produced. The agent is single-shot, so this is a new user prompt, not a follow-up message. It is

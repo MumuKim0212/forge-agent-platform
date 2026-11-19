@@ -87,13 +87,13 @@ class Build(IdMixin, CreatedAtMixin, Base):
     # (no preview, or the check could not look), which is distinct from a measured result with
     # zero routes. Informational only: never an input to the build's status or to an approval.
     smoke_checks: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    # How many in-build repair attempts the platform STARTED for this build
+    # ADR 0047 §5: how many in-build repair attempts the platform STARTED for this build
     # (a repair is a new single-use sandbox run on the same build, token and budget, started
     # because the preview's smoke check measured a failing route). A measured fact set by the
     # platform, never by the agent; 0 = the first attempt shipped, or repair is off. It counts
     # attempts that started, including one that was then discarded.
     repair_attempts: Mapped[int] = mapped_column(Integer, default=0)
-    # The failing routes each repair attempt was started for,
+    # ADR 0047 §Amendment 2026-11-19: the failing routes each repair attempt was started for,
     # `[{"attempt": n, "routes": [{"path", "status", "outcome"}]}]`, one entry per attempt started
     # (so `len == repair_attempts` whenever it is not NULL), written with the count from the same
     # `failing_routes` list the repair prompt is composed from. Platform-measured, safe-filtered

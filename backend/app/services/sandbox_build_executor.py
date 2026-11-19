@@ -39,7 +39,7 @@ Run flow per build (steps 2-5):
        build with `HARVEST_ERROR` -- never silently.
     6. Every temporary tree -- staged, harvested, sanitised -- is removed when
        `execute` returns, on every path, best-effort and logged if it fails.
-    7. With the repair loop (`BUILD_REPAIR_MAX_ATTEMPTS`, default 1, 0 = the flow above exactly): when
+    7. With the repair loop (ADR 0047, `BUILD_REPAIR_MAX_ATTEMPTS`, default 1, 0 = the flow above exactly): when
        the preview's smoke check measured a failing route (`preview_smoke.has_failing_route`), the
        build runs a repair attempt inside this same `execute`, on the same proxy, token and budget:
        a new single-use sandbox run over the previous attempt's sanitised output, told only the
@@ -276,7 +276,7 @@ def _utcnow() -> datetime:
 
 @dataclass
 class _Attempt:
-    """One attempt of a build with the repair loop on: the tree it produced and
+    """One attempt of a build with the repair loop on (ADR 0047): the tree it produced and
     the measured facts about it, kept so that a later attempt can replace it, be discarded in its
     favour, or fall back to it. Nothing here is read to make a decision except the smoke fact (the
     trigger) and `publish_dir`/`summary` (what ships)."""
@@ -766,7 +766,7 @@ class SandboxBuildExecutor:
             cost_budget_usd=cost_budget_usd,
         )
 
-    # --- The in-build repair loop -------------------------------------------------
+    # --- ADR 0047: the in-build repair loop -------------------------------------------------
     #
     # What the order is, and why. With the loop on, an attempt is: agent run, harvest, sanitising
     # copy, the pre-publish checks, an image from a COPY of the tree, the preview, the smoke check.

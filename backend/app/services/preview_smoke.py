@@ -113,7 +113,7 @@ def classify(status: int) -> str:
 
 
 def route_failed(route: object) -> bool:
-    """The ONE definition of a failing smoke route: an integer status of 500 or
+    """The ONE definition of a failing smoke route (ADR 0047 §1): an integer status of 500 or
     above, or the outcome `server_error` or `no_answer`. A 5xx counts whatever the outcome says: the
     runner gives `too_large` precedence over the status class, so a 500 with an oversized body is
     stored as `too_large` with status 500. A 4xx is the route's own answer (a missing parameter, a

@@ -1,4 +1,4 @@
-"""add builds.repair_routes
+"""add builds.repair_routes (ADR 0047 §Amendment 2026-11-19)
 
 Revision ID: f2c8a4d61b37
 Revises: d5b9f3a72e18
