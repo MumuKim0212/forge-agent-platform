@@ -16,6 +16,7 @@ from docker.errors import APIError, ImageNotFound
 
 from app.config import settings
 from app.models.policy_verdict import PolicyVerdict
+from app.models.user import User
 from app.services import build_queue, preview_data
 from app.services import sandbox_build_executor as sbe
 from app.services.preview_manager import (
@@ -204,8 +205,11 @@ def test_the_code_reaches_the_list_the_detail_and_the_timeline(
     build.preview_start_failure = "IMAGE_MISSING"
     db_session.commit()
     uid = seeded_ids["user_id"]
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    (listed,) = [r for r in client.get("/api/approvals", headers=_as(uid)).json() if r["id"] == request.id]
+    listing = client.get("/api/approvals", headers=_as(approver.id))
+    assert listing.status_code == 200
+    (listed,) = [r for r in listing.json() if r["id"] == request.id]
     detail = client.get(f"/api/approvals/{request.id}", headers=_as(uid)).json()
     timeline = _timeline_build(client, project_row, build, uid)
 

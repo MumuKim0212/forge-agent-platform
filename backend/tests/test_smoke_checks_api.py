@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from app.models.build import Build
 from app.models.change_request import ChangeRequest
 from app.models.policy_verdict import PolicyVerdict
+from app.models.user import User
 from app.schemas.build import SmokeChecksOut
 from app.services.approval import create_approval_request_for_verdict
 from app.services.policy_checks import PolicyRiskTier
@@ -85,8 +86,9 @@ def test_an_unmeasured_build_is_null_on_both_not_an_empty_result(client, db_sess
 
 def test_the_pending_list_does_not_carry_the_routes(client, db_session, project_row, seeded_ids):  # noqa: F811
     _build(db_session, project_row, seeded_ids, smoke=MEASURED)
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    resp = client.get("/api/approvals", headers=_as(seeded_ids["user_id"]))
+    resp = client.get("/api/approvals", headers=_as(approver.id))
 
     assert resp.status_code == 200 and "/bookings" not in resp.text
 

@@ -116,8 +116,9 @@ def _create_change_request_and_build(
     return change_request, build
 
 
-# "List/read projects, timeline,
-# builds, deployments, approvals — authenticated". Every route on this
+# The permission matrix: "List/read projects, timeline,
+# builds, deployments — authenticated" (approval reads are scoped
+# separately, ADR 0048). Every route on this
 # router carries `get_current_user`. `proxy_preview` used to be the one
 # identity-free exception here; ADR 0028 layer 2 moved it to its
 # own conditionally-mounted router, `routers/preview_proxy.py` — see that

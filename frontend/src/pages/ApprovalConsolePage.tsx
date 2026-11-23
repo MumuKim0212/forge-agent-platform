@@ -9,6 +9,7 @@ import {
   isApprovalPending,
   rejectBlock,
 } from "../auth/approvalGate";
+import { canOpenApprovalConsole } from "../auth/roles";
 import {
   approvalStatusLabel,
   approvalStatusTone,
@@ -37,7 +38,37 @@ import { ApprovalDetailPane } from "./ApprovalDetailPane";
 const LIST_LOAD_FAILURE_FALLBACK = "승인 요청 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
 const DETAIL_LOAD_FAILURE_FALLBACK = "요청 상세 정보를 불러오지 못했습니다.";
 
+/**
+ * `/approvals`. Opening the console needs `approver` or above (ADR 0048), through
+ * `canOpenApprovalConsole` -- the same predicate the navigation entry is offered by, so a hidden
+ * link and an open page cannot disagree. Anyone else is refused on screen, like `/admin`: the shell
+ * draws the heading and the tab title, this draws the reason. The check sits in this wrapper, above
+ * `ApprovalConsole`, so a refused user never mounts the console and no list is requested.
+ * Presentation only: `GET /approvals` refuses a non-approver on its own.
+ */
 export function ApprovalConsolePage() {
+  const { currentUser } = useIdentity();
+  if (!canOpenApprovalConsole(currentUser)) {
+    // Not a live region: this is the answer for who the user is, not something that just happened
+    // because of an action of theirs.
+    return (
+      <EmptyState
+        tone="refused"
+        live={false}
+        title="승인 콘솔은 승인자와 관리자만 사용할 수 있습니다"
+        description={
+          <>
+            현재 역할: {currentUser?.role ?? "없음"}. 내 요청의 상태는 프로젝트 화면의 타임라인에서 볼 수
+            있습니다.
+          </>
+        }
+      />
+    );
+  }
+  return <ApprovalConsole />;
+}
+
+function ApprovalConsole() {
   const { currentUser } = useIdentity();
   // The list and the open request are two loads, each newest-wins. A failed list load
   // must not render as the empty-list copy (c5): its message is `loadError`, rendered apart.

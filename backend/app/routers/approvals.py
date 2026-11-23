@@ -12,7 +12,7 @@ from app.models.user import User
 from app.schemas.build import ChangedFilesOut, SmokeChecksOut, served_repair_routes
 from app.schemas.approval import ApprovalDecisionInput, ApprovalRequestOut, ApprovalRequestSummaryOut
 from app.services.approval import InvalidDecisionError, SelfApprovalError, decide
-from app.services.roles import Role, holds_at_least
+from app.services.roles import Role, holds_at_least, may_read_approval_request
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -112,16 +112,17 @@ def _to_detail(request: ApprovalRequest, db: Session) -> ApprovalRequestOut:
 def list_approvals(
     status: str | None = None,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[ApprovalRequestSummaryOut]:
     """"Lists pending requests
     visible to approvers ... project, requester, tier, flagged findings
     summary, links to PR and preview." Defaults to pending + recently
     decided (no filter); `status` narrows to one status explicitly.
 
-    Authenticated, not `approver`-gated: the permission
-    matrix puts approval *reads* in the "authenticated" row (requesters see
-    their own requests' status), while only the decisions require the role."""
+    ADR 0048: the list needs `approver` or above, with or without the `status`
+    filter, and refuses with the same shape as approve/reject. A requester sees
+    their own request's status in the project timeline, not here."""
+    _require_approver(current_user)
     stmt = select(ApprovalRequest)
     if status:
         stmt = stmt.where(ApprovalRequest.status == status)
@@ -134,11 +135,19 @@ def list_approvals(
 def get_approval(
     approval_id: str,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ApprovalRequestOut:
+    """ADR 0048: `approver` and above, the request's requester, or its project's owner
+    (`roles.may_read_approval_request`). An unknown id is a 404 for everyone, checked
+    first: ids are not guessable and their existence is not a secret."""
     approval = db.get(ApprovalRequest, approval_id)
     if approval is None:
         raise HTTPException(status_code=404, detail="Approval request not found")
+    project = db.get(Project, approval.project_id)
+    if not may_read_approval_request(
+        current_user, approval.requester_id, project.owner_id if project is not None else None
+    ):
+        raise HTTPException(status_code=403, detail="Approver or admin role required")
     return _to_detail(approval, db)
 
 

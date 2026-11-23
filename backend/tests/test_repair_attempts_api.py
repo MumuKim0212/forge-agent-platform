@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.models.user import User
 from app.schemas.build import BuildOut
 from app.schemas.eval_run import EvalCaseOut, EvalRunDetailOut, EvalRunOut
 from tests.test_measured_facts_api import _as, project_row  # noqa: F401 - a fixture, used by name
@@ -56,8 +57,9 @@ def test_the_pending_list_summary_does_not_carry_the_count(client, db_session, p
     build, _ = _build(db_session, project_row, seeded_ids, smoke=None)
     build.repair_attempts = 2
     db_session.commit()
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    resp = client.get("/api/approvals", headers=_as(seeded_ids["user_id"]))
+    resp = client.get("/api/approvals", headers=_as(approver.id))
 
     assert resp.status_code == 200
     assert resp.json() and all("repair_attempts" not in row for row in resp.json())
@@ -150,8 +152,9 @@ def test_the_pending_list_summary_does_not_carry_the_routes(client, db_session, 
     build, _ = _build(db_session, project_row, seeded_ids, smoke=None)
     build.repair_routes = STORED
     db_session.commit()
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    resp = client.get("/api/approvals", headers=_as(seeded_ids["user_id"]))
+    resp = client.get("/api/approvals", headers=_as(approver.id))
 
     assert resp.status_code == 200
     assert resp.json() and all("repair_routes" not in row for row in resp.json())

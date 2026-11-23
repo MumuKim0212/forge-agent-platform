@@ -73,13 +73,13 @@ def _make_request(db_session, project, risk_tier=PolicyRiskTier.MEDIUM, flag_che
 
 
 def test_list_approvals_returns_live_requests_with_summary_fields(
-    client, db_session, project_row, seeded_ids
+    client, db_session, project_row, seeded_ids, approver_id
 ):
     _build, request = _make_request(
         db_session, project_row, risk_tier=PolicyRiskTier.HIGH, flag_check="secrets_pii"
     )
 
-    resp = client.get("/api/approvals", headers={"X-Forge-User-Id": seeded_ids["user_id"]})
+    resp = client.get("/api/approvals", headers={"X-Forge-User-Id": approver_id})
     assert resp.status_code == 200
     items = resp.json()
     assert len(items) == 1
@@ -93,9 +93,9 @@ def test_list_approvals_returns_live_requests_with_summary_fields(
     assert item["diff_ref"] == "forge-build-x#1"
 
 
-def test_list_approvals_status_filter(client, db_session, project_row, seeded_ids):
+def test_list_approvals_status_filter(client, db_session, project_row, approver_id):
     _make_request(db_session, project_row, risk_tier=PolicyRiskTier.LOW)
-    headers = {"X-Forge-User-Id": seeded_ids["user_id"]}
+    headers = {"X-Forge-User-Id": approver_id}
 
     resp = client.get("/api/approvals?status=PENDING", headers=headers)
     assert resp.status_code == 200
@@ -104,6 +104,112 @@ def test_list_approvals_status_filter(client, db_session, project_row, seeded_id
     resp = client.get("/api/approvals?status=AUTO_APPROVED", headers=headers)
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+
+
+def test_list_approvals_is_refused_to_a_requester_with_and_without_the_status_filter(
+    client, db_session, project_row, seeded_ids, approver_id
+):
+    """ADR 0048 section 1: the requester who made the request and owns the project is still
+    refused the list, and the `status` filter is no way around it. The same call as an
+    approver returns the request, so the refusal is the role and not an empty result."""
+    _build, request = _make_request(db_session, project_row)
+    requester_headers = {"X-Forge-User-Id": seeded_ids["user_id"]}
+
+    plain = client.get("/api/approvals", headers=requester_headers)
+    filtered = client.get("/api/approvals?status=PENDING", headers=requester_headers)
+    assert (plain.status_code, filtered.status_code) == (403, 403)
+    assert plain.json() == {"detail": "Approver or admin role required"}
+    assert filtered.json() == {"detail": "Approver or admin role required"}
+
+    as_approver = client.get("/api/approvals?status=PENDING", headers={"X-Forge-User-Id": approver_id})
+    assert as_approver.status_code == 200
+    assert [i["id"] for i in as_approver.json()] == [request.id]
+
+
+def test_list_approvals_is_open_to_an_admin_and_needs_identity(
+    client, db_session, project_row, admin_id
+):
+    _build, request = _make_request(db_session, project_row)
+
+    as_admin = client.get("/api/approvals", headers={"X-Forge-User-Id": admin_id})
+    assert as_admin.status_code == 200
+    assert [i["id"] for i in as_admin.json()] == [request.id]
+    assert client.get("/api/approvals").status_code == 401
+
+
+def test_list_approvals_refuses_an_unknown_role(client, db_session, project_row, seeded_ids):
+    _make_request(db_session, project_row)
+    user = db_session.get(User, seeded_ids["user_id"])
+    user.role = "wizard"
+    db_session.commit()
+
+    resp = client.get("/api/approvals", headers={"X-Forge-User-Id": user.id})
+    assert resp.status_code == 403
+
+
+def test_detail_is_read_by_the_requester_who_is_not_the_owner(
+    client, db_session, seeded_ids, approver_id
+):
+    """ADR 0048 section 2, the requester half on its own: the project belongs to someone
+    else (the approver here), the request was made by the plain requester."""
+    project = Project(
+        name="Owned By Someone Else",
+        owner_id=approver_id,
+        team_id=seeded_ids["team_id"],
+        template_id=seeded_ids["template_id"],
+        status=ProjectStatus.SUBMITTED,
+    )
+    db_session.add(project)
+    db_session.flush()
+    build = Build(project_id=project.id, type="modify", diff_ref="forge-build-req#1")
+    db_session.add(build)
+    db_session.flush()
+    verdict = PolicyVerdict(build_id=build.id, risk_tier=PolicyRiskTier.MEDIUM)
+    db_session.add(verdict)
+    db_session.flush()
+    request = create_approval_request_for_verdict(
+        db_session, build=build, verdict=verdict, project_id=project.id,
+        requester_id=seeded_ids["user_id"],
+    )
+    db_session.commit()
+
+    resp = client.get(f"/api/approvals/{request.id}", headers={"X-Forge-User-Id": seeded_ids["user_id"]})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == request.id
+    assert resp.json()["requester_id"] == seeded_ids["user_id"]
+
+
+def test_detail_is_refused_to_an_unrelated_requester_but_read_by_an_approver(
+    client, db_session, project_row, seeded_ids, approver_id
+):
+    _build, request = _make_request(db_session, project_row)
+    outsider = User(name="Outsider", email="outsider@example.com", role="requester")
+    db_session.add(outsider)
+    db_session.commit()
+
+    refused = client.get(f"/api/approvals/{request.id}", headers={"X-Forge-User-Id": outsider.id})
+    assert refused.status_code == 403
+    assert "decisions" not in refused.json()
+
+    allowed = client.get(f"/api/approvals/{request.id}", headers={"X-Forge-User-Id": approver_id})
+    assert allowed.status_code == 200
+    assert allowed.json()["id"] == request.id
+
+
+def test_may_read_approval_request_is_fail_closed():
+    from types import SimpleNamespace
+
+    from app.services.roles import Role, may_read_approval_request
+
+    me = SimpleNamespace(id="u1", role=Role.REQUESTER)
+    assert may_read_approval_request(me, "u1", "u9") is True  # the requester
+    assert may_read_approval_request(me, "u9", "u1") is True  # the project's owner
+    assert may_read_approval_request(me, "u9", "u8") is False  # neither
+    assert may_read_approval_request(me, None, None) is False  # no ids is not everyone's
+    assert may_read_approval_request(SimpleNamespace(id="u1", role="wizard"), "u9", "u8") is False
+    assert may_read_approval_request(SimpleNamespace(id="u1", role=None), "u9", "u8") is False
+    assert may_read_approval_request(SimpleNamespace(id="u3", role=Role.APPROVER), "u9", "u8") is True
+    assert may_read_approval_request(SimpleNamespace(id="u3", role=Role.ADMIN), None, None) is True
 
 
 def test_get_approval_detail_includes_decisions_and_per_check_results(
@@ -188,11 +294,12 @@ def test_approval_detail_owner_is_in_the_decision_responses_too(
     assert decided["project_owner_id"] == seeded_ids["user_id"]
 
 
-def test_get_approval_404_on_unknown_id(client, seeded_ids):
+def test_get_approval_404_on_unknown_id(client, approver_id):
     resp = client.get(
-        "/api/approvals/does-not-exist", headers={"X-Forge-User-Id": seeded_ids["user_id"]}
+        "/api/approvals/does-not-exist", headers={"X-Forge-User-Id": approver_id}
     )
     assert resp.status_code == 404
+    assert resp.json() == {"detail": "Approval request not found"}
 
 
 # ---------------------------------------------------------------------------

@@ -77,6 +77,7 @@ describe("current-page marking", () => {
   }
 
   it("marks exactly the entry for the page", () => {
+    identity.role = "approver";
     renderShell("/approvals");
 
     expect(currentLabels()).toEqual(["승인 콘솔"]);
@@ -114,7 +115,32 @@ describe("the 관리자 콘솔 entry", () => {
     renderShell("/projects");
 
     expect(screen.queryByRole("link", { name: "관리자 콘솔" })).toBeNull();
-    expect(navLinks().map((link) => link.textContent)).toEqual(["프로젝트", "새 요청", "승인 콘솔"]);
+  });
+});
+
+describe("the 승인 콘솔 entry (ADR 0048)", () => {
+  it.each(["approver", "admin"])("is in the navigation for %s", (role) => {
+    identity.role = role;
+    renderShell("/projects");
+
+    expect(
+      within(screen.getByRole("navigation", { name: "주 메뉴" })).getByRole("link", { name: "승인 콘솔" }).getAttribute("href"),
+    ).toBe("/approvals");
+  });
+
+  it.each(["requester", "superuser"])("is absent for role %s, and the other two entries remain", (role) => {
+    identity.role = role;
+    renderShell("/projects");
+
+    expect(screen.queryByRole("link", { name: "승인 콘솔" })).toBeNull();
+    expect(navLinks().map((link) => link.textContent)).toEqual(["프로젝트", "새 요청"]);
+  });
+
+  it("still titles the page for a requester who opens /approvals directly", () => {
+    identity.role = "requester";
+    renderShell("/approvals");
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("승인 콘솔");
   });
 });
 

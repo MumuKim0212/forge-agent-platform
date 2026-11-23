@@ -5,7 +5,7 @@
  * Presentation only: an entry that is absent here is not a permission, and an entry that is
  * present is not an authorisation. Every endpoint behind it still answers for itself.
  */
-import { canAdministerPlatform } from "../auth/roles";
+import { canAdministerPlatform, canOpenApprovalConsole } from "../auth/roles";
 import type { User } from "../types/api";
 
 /** The 404's heading and its tab title; the page itself (`NotFoundPage`) draws the heading. */
@@ -37,12 +37,19 @@ export interface NavItem {
   label: string;
 }
 
-/** The workspace entries every signed-in user sees. The paths are routes (`App.appRoutes`). */
+/** The workspace entries every signed-in user sees (the approval console is added for approvers). The paths are routes (`App.appRoutes`). */
 const WORKSPACE_ITEMS: readonly NavItem[] = [
   { to: "/projects", label: "프로젝트" },
   { to: "/projects/new", label: "새 요청" },
-  { to: "/approvals", label: "승인 콘솔" },
 ];
+
+/**
+ * The approval console entry (ADR 0048): offered only to an approver and above, through the same
+ * predicate the page refuses with (`ApprovalConsolePage`). It stays in `pageTitleFor`'s list
+ * whether or not it is offered, so a requester who opens `/approvals` directly gets its heading
+ * and tab title on the refusal.
+ */
+const APPROVAL_ITEM: NavItem = { to: "/approvals", label: "승인 콘솔" };
 
 /**
  * The one console entry. It goes through the same predicate the page guards itself with
@@ -59,7 +66,7 @@ export interface NavGroups {
 
 export function navGroupsFor(user: User | null): NavGroups {
   return {
-    workspace: [...WORKSPACE_ITEMS],
+    workspace: canOpenApprovalConsole(user) ? [...WORKSPACE_ITEMS, APPROVAL_ITEM] : [...WORKSPACE_ITEMS],
     administration: canAdministerPlatform(user) ? [ADMIN_ITEM] : [],
   };
 }
@@ -83,7 +90,7 @@ export function currentNavTo(pathname: string): string | null {
 export function pageTitleFor(pathname: string): string | null {
   const to = currentNavTo(pathname);
   if (to === null) return null;
-  const all = [...WORKSPACE_ITEMS, ADMIN_ITEM];
+  const all = [...WORKSPACE_ITEMS, APPROVAL_ITEM, ADMIN_ITEM];
   return all.find((item) => item.to === to)?.label ?? null;
 }
 

@@ -776,7 +776,7 @@ def test_demo_data_has_findings_with_a_long_path_and_a_redacted_match(db_session
 def test_the_pending_request_carries_the_hostile_path_and_the_drift_through_the_api(db_session, client):
     populate_demo_data(db_session, is_prod=False)
     pending = db_session.query(ApprovalRequest).filter_by(status=ApprovalStatus.PENDING).all()
-    any_user = db_session.query(User).first()
+    any_user = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the detail is an approver's here
 
     bodies = [
         client.get(f"/api/approvals/{r.id}", headers={"X-Forge-User-Id": any_user.id}).json() for r in pending
@@ -843,7 +843,7 @@ def test_demo_data_has_a_hostile_summary_and_a_path_with_an_override(db_session,
     assert any(RLO in e["path"] for e in build.changed_files["entries"])
 
     request = db_session.query(ApprovalRequest).filter_by(build_id=build.id).one()
-    any_user = db_session.query(User).first()
+    any_user = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the detail is an approver's here
     body = client.get(f"/api/approvals/{request.id}", headers={"X-Forge-User-Id": any_user.id}).json()
     assert body["agent_summary"] == text  # passed to the API as stored
 

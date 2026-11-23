@@ -49,8 +49,23 @@ export function canDecideApprovals(user: User | null): boolean {
 }
 
 /**
- * Confirm deploy / rollback / stop — `own` or
- * `admin`, mirroring `routers/deployments._require_owner_or_admin`.
+ * ADR 0048: "List approval requests — `approver`",
+ * mirroring `routers/approvals.list_approvals`. Whether the approval console may be opened at all.
+ *
+ * The **same** predicate answers both questions: the navigation entry (`shellNav.navGroupsFor`)
+ * and the page's refusal (`ApprovalConsolePage`), so a hidden link and an open page cannot
+ * disagree. Its own predicate, apart from `canDecideApprovals` (the approve/reject buttons) though
+ * the rung is the same today: reading and deciding are different endpoints, and a future change to
+ * one must not silently move the other. A requester reads the status of their own request in the
+ * project timeline, not here. Presentation only: `GET /approvals` answers 403 on its own.
+ */
+export function canOpenApprovalConsole(user: User | null): boolean {
+  return holdsAtLeast(user?.role, Role.APPROVER);
+}
+
+/**
+ * "Confirm deploy / rollback / stop — `own` or
+ * `admin`", mirroring `routers/deployments._require_owner_or_admin`.
  *
  * Ownership and role are **separate axes** (project ownership is a
  * separate axis): a `requester` owns their own projects and needs no grant,

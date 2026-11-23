@@ -55,3 +55,4 @@ If you read three, read these:
 | [0018](0018-identity-generic-oidc.md) | Identity through generic OIDC; the platform database owns authorization |
 | [0022](0022-local-accounts-approved-signup.md) | Local accounts with admin-approved signup, for organizations without an identity provider |
 | [0021](0021-frontend-test-scope.md) | Frontend tests: unit tests, no end-to-end layer, one narrow accessibility exception |
+| [0048](0048-approval-read-access.md) | Approval requests are read by approvers, and by the requester and project owner of a request |

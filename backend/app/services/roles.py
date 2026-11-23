@@ -86,6 +86,22 @@ def may_read_build_trace(user: User, project_owner_id: str | None) -> bool:
     return is_owner or holds_at_least(user.role, Role.APPROVER)
 
 
+def may_read_approval_request(
+    user: User, requester_id: str | None, project_owner_id: str | None
+) -> bool:
+    """ADR 0048 §Decision 2: one approval
+    request's detail is for `approver` and above, for the request's requester, and for
+    the owner of its project (the shape of `may_read_build_trace`).
+
+    The three ways in are independent: ownership and authorship need no role, and
+    `approver` needs neither. `admin` clears the `approver` rung. Fail-closed: a missing
+    requester or owner id never matches anybody, and an unrecognised role holds nothing,
+    leaving the id halves as the only way in."""
+    is_requester = requester_id is not None and user.id == requester_id
+    is_owner = project_owner_id is not None and user.id == project_owner_id
+    return is_requester or is_owner or holds_at_least(user.role, Role.APPROVER)
+
+
 class UnknownRoleError(ValueError):
     """The requested new role is not one of `ALL_ROLES`. Surfaced as 400 —
     accepting it would write a value that `holds_at_least` then treats as no

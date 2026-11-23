@@ -175,11 +175,13 @@ def test_c2_an_unmeasured_build_and_a_missing_request_are_null_not_invented(
     assert body["protected_path_drift"] is None
 
 
-def test_c2_reads_stay_open_to_any_authenticated_user_and_need_authentication(
+def test_c2_the_requester_who_made_the_request_reads_it_and_no_credentials_is_401(
     client, db_session, project_row, seeded_ids
 ):
-    """approval READS are `authenticated`;
-    only the decisions are role-gated."""
+    """ADR 0048: the detail is read by the request's requester (here also the
+    project owner), an approver or an admin; an unrelated user is refused (covered
+    in test_approvals and test_rbac). This case shows the "belongs to it" half
+    and that no credentials is 401."""
     _, request = _build(db_session, project_row, seeded_ids)
     requester = db_session.query(User).filter_by(role="requester").first()
 
@@ -209,8 +211,10 @@ def test_c2_the_decision_is_still_approver_gated_and_the_decision_response_carri
 
 def test_c3_the_list_has_counts_only(client, db_session, project_row, seeded_ids):
     _build(db_session, project_row, seeded_ids)
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    resp = client.get("/api/approvals", headers=_as(seeded_ids["user_id"]))
+    resp = client.get("/api/approvals", headers=_as(approver.id))
+    assert resp.status_code == 200
 
     (item,) = resp.json()
     assert item["changed_counts"] == {"totals": {"added": 1, "modified": 1, "deleted": 1}, "truncated": False}
@@ -220,7 +224,8 @@ def test_c3_the_list_has_counts_only(client, db_session, project_row, seeded_ids
 
 def test_c3_an_unmeasured_build_has_null_counts_in_the_list(client, db_session, project_row, seeded_ids):
     _build(db_session, project_row, seeded_ids, changed=None, drift=None)
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    (item,) = client.get("/api/approvals", headers=_as(seeded_ids["user_id"])).json()
+    (item,) = client.get("/api/approvals", headers=_as(approver.id)).json()
 
     assert item["changed_counts"] is None

@@ -17,6 +17,7 @@ import {
   canDeactivateUsers,
   canEditQuota,
   canGrantRoles,
+  canOpenApprovalConsole,
   canOperateDeployment,
   canReadBuildTrace,
   canReviewSignups,
@@ -233,6 +234,28 @@ describe("the admin console gates — admin only, each on its own", () => {
       expect(gate(makeUser(Role.APPROVER, project.owner_id))).toBe(false);
     });
   }
+});
+
+describe("canOpenApprovalConsole (ADR 0048)", () => {
+  // Literal expectations, one row per rung: approver and above, nobody below, nothing unknown.
+  it.each([
+    ["requester", false],
+    ["approver", true],
+    ["admin", true],
+  ])("%s: %s", (role, expected) => {
+    expect(canOpenApprovalConsole(makeUser(role))).toBe(expected);
+  });
+
+  it("is false with no user, and for every unrecognised role (fail closed)", () => {
+    expect(canOpenApprovalConsole(null)).toBe(false);
+    for (const role of UNRECOGNISED) {
+      expect(canOpenApprovalConsole(makeUser(role))).toBe(false);
+    }
+  });
+
+  it("does not consider ownership: owning a project does not open the cross-project console", () => {
+    expect(canOpenApprovalConsole(makeUser(Role.REQUESTER, project.owner_id))).toBe(false);
+  });
 });
 
 describe("isSelfRoleChange — which row is 'you'", () => {

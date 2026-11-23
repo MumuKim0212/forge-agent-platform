@@ -298,6 +298,9 @@ const NAMED_GATES = [
   // the page calls the wrappers; `deployActionFailureMessage` is reached through the first
   "deployActionFailure",
   "deployFailureAfter",
+  // auth/roles.ts: whether the approval console may be opened -- the nav entry (via
+  // shellNav.ts) and the page refusal (ApprovalConsolePage.tsx) both read it
+  "canOpenApprovalConsole",
   // auth/approvalGate.ts and pages/approvalMessages.ts
   "canApproveRequest",
   "canRejectRequest",

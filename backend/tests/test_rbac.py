@@ -411,15 +411,45 @@ def test_writes_that_create_work_require_authentication(client, seeded_ids):
 
 @pytest.fixture()
 def read_row_paths(db_session, seeded_ids) -> list[str]:
-    """One **real** URL per endpoint in the spec's read row.
+    """One **real** URL per endpoint in the spec's "authenticated" read row.
 
     Real ids matter here: a made-up id returns 404 whether or not the gate
     exists, so a table of invented paths would still pass with every
     `Depends(get_current_user)` deleted. These all reach a handler that would
-    hand back data."""
+    hand back data. The two approval paths are NOT in this row any more (ADR 0048):
+    they have their own fixture and truth tables below."""
     project = Project(
         name="read-row-project",
         owner_id=seeded_ids["user_id"],
+        team_id=seeded_ids["team_id"],
+        template_id=seeded_ids["template_id"],
+        status=ProjectStatus.SUBMITTED,
+    )
+    db_session.add(project)
+    db_session.flush()
+    db_session.commit()
+    return [
+        "/api/projects",
+        f"/api/projects/{project.id}",
+        f"/api/projects/{project.id}/timeline",
+        f"/api/projects/{project.id}/change-requests",
+        f"/api/projects/{project.id}/deployments",
+        "/api/templates",
+        f"/api/templates/{seeded_ids['template_id']}",
+    ]
+
+
+@pytest.fixture()
+def approval_read_case(db_session, seeded_ids) -> dict:
+    """ADR 0048: one approval request whose requester and whose project's owner are two
+    different people, so each of the two "belongs to it" halves of the detail rule can be
+    cut off from the other. Returns the two paths and the parties."""
+    requester_user = db_session.query(User).filter_by(role=Role.REQUESTER).first()
+    owner = _user(db_session, name="project-owner", role=Role.REQUESTER)
+    unrelated = _user(db_session, name="unrelated-requester", role=Role.REQUESTER)
+    project = Project(
+        name="approval-read-project",
+        owner_id=owner.id,
         team_id=seeded_ids["team_id"],
         template_id=seeded_ids["template_id"],
         status=ProjectStatus.SUBMITTED,
@@ -437,37 +467,34 @@ def read_row_paths(db_session, seeded_ids) -> list[str]:
         build=build,
         verdict=verdict,
         project_id=project.id,
-        requester_id=project.owner_id,
+        requester_id=requester_user.id,
     )
     db_session.commit()
-    return [
-        "/api/projects",
-        f"/api/projects/{project.id}",
-        f"/api/projects/{project.id}/timeline",
-        f"/api/projects/{project.id}/change-requests",
-        f"/api/projects/{project.id}/deployments",
-        "/api/approvals",
-        f"/api/approvals/{approval.id}",
-        "/api/templates",
-        f"/api/templates/{seeded_ids['template_id']}",
-    ]
+    return {
+        "list": "/api/approvals",
+        "detail": f"/api/approvals/{approval.id}",
+        "approval_id": approval.id,
+        "requester": requester_user,
+        "owner": owner,
+        "unrelated": unrelated,
+    }
 
 
-def test_every_read_endpoint_requires_authentication(client, read_row_paths):
-    """List/read projects, timeline, builds,
-    deployments, approvals — authenticated, and list/read templates —
-    authenticated. All nine were reachable with no credentials at all,
-    which handed an anonymous caller the whole project registry plus every
-    approval's requester, risk tier and flagged checks.
+def test_every_read_endpoint_requires_authentication(client, read_row_paths, approval_read_case):
+    """The permission matrix: "List/read projects, timeline, builds,
+    deployments — authenticated" and "List/read templates —
+    authenticated", plus the two approval reads (which now need more than
+    authentication, but still need that: no credentials is 401, not 403).
 
-    Asserted as a list comprehension rather than nine separate calls so the
+    Asserted as a list comprehension rather than separate calls so the
     failure message names *which* endpoint regressed."""
-    assert [p for p in read_row_paths if client.get(p).status_code != 401] == []
+    paths = read_row_paths + [approval_read_case["list"], approval_read_case["detail"]]
+    assert [p for p in paths if client.get(p).status_code != 401] == []
 
 
 def test_the_read_row_needs_no_role_beyond_authentication(client, read_row_paths, requester):
     """The other half of the same row: "authenticated" is the whole bar, so
-    the lowest rung reads all nine. Without this, gating them to a role
+    the lowest rung reads all seven. Without this, gating them to a role
     would pass the test above while breaking every requester."""
     headers = _headers(requester.id)
     assert [
@@ -476,6 +503,75 @@ def test_the_read_row_needs_no_role_beyond_authentication(client, read_row_paths
         for response in [client.get(p, headers=headers)]
         if response.status_code != 200
     ] == []
+
+
+def test_the_approval_list_truth_table(client, approval_read_case, approver, admin):
+    """ADR 0048 section 1: the list needs `approver` or above, whoever the request belongs to."""
+    path = approval_read_case["list"]
+    outcomes = {
+        "requester": client.get(path, headers=_headers(approval_read_case["requester"].id)),
+        "owner": client.get(path, headers=_headers(approval_read_case["owner"].id)),
+        "unrelated": client.get(path, headers=_headers(approval_read_case["unrelated"].id)),
+        "approver": client.get(path, headers=_headers(approver.id)),
+        "admin": client.get(path, headers=_headers(admin.id)),
+    }
+    assert {who: r.status_code for who, r in outcomes.items()} == {
+        "requester": 403,
+        "owner": 403,
+        "unrelated": 403,
+        "approver": 200,
+        "admin": 200,
+    }
+    # The allowed callers get the request itself, not an empty 200.
+    for who in ("approver", "admin"):
+        assert [i["id"] for i in outcomes[who].json()] == [approval_read_case["approval_id"]]
+
+
+def test_the_approval_detail_truth_table(client, approval_read_case, approver, admin):
+    """ADR 0048 section 2: approver and above, the request's requester, or its project's
+    owner; nobody else. The two "belongs to it" halves are independent of each other."""
+    path = approval_read_case["detail"]
+    parties = {
+        "requester": approval_read_case["requester"],
+        "owner": approval_read_case["owner"],
+        "unrelated": approval_read_case["unrelated"],
+        "approver": approver,
+        "admin": admin,
+    }
+    outcomes = {who: client.get(path, headers=_headers(u.id)) for who, u in parties.items()}
+    assert {who: r.status_code for who, r in outcomes.items()} == {
+        "requester": 200,
+        "owner": 200,
+        "unrelated": 403,
+        "approver": 200,
+        "admin": 200,
+    }
+    for who in ("requester", "owner", "approver", "admin"):
+        assert outcomes[who].json()["id"] == approval_read_case["approval_id"]
+
+
+def test_an_unknown_approval_id_is_404_before_the_read_rule_applies(client, approval_read_case, approver):
+    """The 404 comes first: an unknown id is not a secret, and it is the same answer for
+    a caller who could not have read the request anyway."""
+    path = "/api/approvals/does-not-exist"
+    assert client.get(path, headers=_headers(approver.id)).status_code == 404
+    assert client.get(path, headers=_headers(approval_read_case["unrelated"].id)).status_code == 404
+
+
+def test_an_unrecognised_role_reads_no_approval_it_does_not_belong_to(client, db_session, approval_read_case):
+    """Fail-closed (ADR 0048): an unknown role is no privilege, so the
+    list is refused and an unrelated detail is refused -- while an unknown-role user still
+    reads the detail of a request they made (the id half needs no role)."""
+    stranger = approval_read_case["unrelated"]
+    stranger.role = "wizard"
+    approval_read_case["requester"].role = "wizard"
+    db_session.commit()
+
+    assert client.get(approval_read_case["list"], headers=_headers(stranger.id)).status_code == 403
+    assert client.get(approval_read_case["detail"], headers=_headers(stranger.id)).status_code == 403
+    own = client.get(approval_read_case["detail"], headers=_headers(approval_read_case["requester"].id))
+    assert own.status_code == 200
+    assert client.get(approval_read_case["list"], headers=_headers(approval_read_case["requester"].id)).status_code == 403
 
 
 def test_the_health_check_needs_no_identity(client):

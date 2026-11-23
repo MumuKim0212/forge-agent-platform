@@ -23,6 +23,7 @@ from app.models.build import Build
 from app.models.change_request import ChangeRequest
 from app.models.policy_verdict import PolicyVerdict
 from app.models.project import Project
+from app.models.user import User
 from app.schema_check import alembic_config
 from app.services.agent_adapter import AgentAdapterResult
 from app.services.approval import create_approval_request_for_verdict
@@ -458,9 +459,11 @@ def test_b1_a_build_with_no_summary_is_null_on_both(client, db_session, project_
 
 def test_b2_the_pending_list_does_not_carry_it(client, db_session, project_row, seeded_ids):
     _succeeded_build_with_approval(db_session, project_row, seeded_ids, AGENT_TEXT)
+    approver = db_session.query(User).filter_by(role="approver").first()  # ADR 0048: the list is an approver's
 
-    resp = client.get("/api/approvals", headers=_as(seeded_ids["user_id"]))
+    resp = client.get("/api/approvals", headers=_as(approver.id))
 
+    assert resp.status_code == 200
     (item,) = resp.json()
     assert "agent_summary" not in item
     assert "inventory page" not in resp.text

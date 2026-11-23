@@ -15,6 +15,11 @@ export interface EmptyStateProps {
    * is nothing to show here, and here is why" with a different tone and
    * copy — never a different layout. */
   tone?: EmptyStateTone;
+  /** Whether the block is a live region (`role="alert"`). Defaults to `true` for the `"refused"`
+   * tone, as before. A refusal that is simply the answer for who you are (a requester
+   * opening the approval console) is not an event that just happened because of the user, so it
+   * passes `live={false}`: it is read as part of the page, not announced over it. */
+  live?: boolean;
   className?: string;
 }
 
@@ -37,11 +42,12 @@ export function EmptyState({
   icon,
   action,
   tone = "neutral",
+  live = tone === "refused",
   className,
 }: EmptyStateProps) {
   return (
     <div
-      role={tone === "refused" ? "alert" : undefined}
+      role={live ? "alert" : undefined}
       className={cx("rounded-card border px-6 py-8 text-center", TONE_CLASSES[tone], className)}
     >
       {icon && (

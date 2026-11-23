@@ -22,13 +22,16 @@ vi.mock("../api/approvals", () => ({
   approvalsApi: { list: vi.fn(), get: vi.fn(), approve: vi.fn(), reject: vi.fn() },
 }));
 
+// The viewer's role, set per test (a requester is refused on screen); an approver by default.
+const identity: { role: string } = { role: "approver" };
+
 vi.mock("../context/IdentityContext", () => ({
   useIdentity: () => ({
     currentUser: {
       id: "u-approver",
       name: "승인자",
       email: "approver@example.test",
-      role: "approver",
+      role: identity.role,
       team_id: null,
       created_at: "2026-10-01T00:00:00Z",
     },
@@ -101,6 +104,7 @@ const SMOKE: SmokeChecks = {
 };
 
 beforeEach(() => {
+  identity.role = "approver";
   vi.mocked(approvalsApi.list).mockReset().mockResolvedValue([SUMMARY]);
   vi.mocked(approvalsApi.get).mockReset();
 });
@@ -315,5 +319,42 @@ describe("the routes each repair attempt was started for, inside the approval co
     } else {
       expect(screen.queryByRole("heading", { name: "수리 시도" })).not.toBeInTheDocument();
     }
+  });
+});
+
+describe("the refusal for a user who may not open the console (ADR 0048)", () => {
+  it.each(["requester", "superuser"])("a %s sees the reason, and no list is requested", async (role) => {
+    identity.role = role;
+
+    render(<ApprovalConsolePage />);
+
+    expect(screen.getByText("승인 콘솔은 승인자와 관리자만 사용할 수 있습니다")).toBeTruthy();
+    expect(screen.getByText(/현재 역할/).textContent).toContain(role);
+    // The console never mounted: nothing asked the API for a list, and no row or detail exists.
+    // Flush a few ticks first, so a load started on mount would have been seen.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(vi.mocked(approvalsApi.list)).not.toHaveBeenCalled();
+    expect(vi.mocked(approvalsApi.get)).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listitem")).toBeNull();
+  });
+
+  it("is not a live region: it is who the user is, not something that just happened", () => {
+    identity.role = "requester";
+
+    render(<ApprovalConsolePage />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it.each(["approver", "admin"])("a %s gets the console, and the list is requested", async (role) => {
+    identity.role = role;
+
+    render(<ApprovalConsolePage />);
+
+    expect(await screen.findByRole("listitem", { name: "휴가 도구 요청 상세 보기" })).toBeTruthy();
+    expect(vi.mocked(approvalsApi.list)).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("승인 콘솔은 승인자와 관리자만 사용할 수 있습니다")).toBeNull();
   });
 });

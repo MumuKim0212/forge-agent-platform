@@ -22,14 +22,25 @@ function userWithRole(role: string): User {
 }
 
 describe("navGroupsFor", () => {
-  it("offers every signed-in user the three workspace entries, in order", () => {
-    const groups = navGroupsFor(userWithRole("requester"));
+  it("offers every signed-in user the two workspace entries, in order, and no approval console below approver", () => {
+    expect(navGroupsFor(userWithRole("requester")).workspace).toEqual([
+      { to: "/projects", label: "프로젝트" },
+      { to: "/projects/new", label: "새 요청" },
+    ]);
+  });
 
-    expect(groups.workspace).toEqual([
+  it.each(["approver", "admin"])("offers the approval console, last, to %s (ADR 0048)", (role) => {
+    expect(navGroupsFor(userWithRole(role)).workspace).toEqual([
       { to: "/projects", label: "프로젝트" },
       { to: "/projects/new", label: "새 요청" },
       { to: "/approvals", label: "승인 콘솔" },
     ]);
+  });
+
+  it("offers no approval console for an unrecognised role or no user (fail closed)", () => {
+    for (const user of [userWithRole("superuser"), userWithRole(""), null]) {
+      expect(navGroupsFor(user).workspace.map((item) => item.to)).toEqual(["/projects", "/projects/new"]);
+    }
   });
 
   it("offers the one console entry to an admin and nobody below", () => {
