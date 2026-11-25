@@ -40,10 +40,12 @@ Run flow per build (steps 2-5):
     6. Every temporary tree -- staged, harvested, sanitised -- is removed when
        `execute` returns, on every path, best-effort and logged if it fails.
     7. With the repair loop (ADR 0047, `BUILD_REPAIR_MAX_ATTEMPTS`, default 1, 0 = the flow above exactly): when
-       the preview's smoke check measured a failing route (`preview_smoke.has_failing_route`), the
+       the preview's smoke check measured a failing route (`preview_smoke.has_failing_route`), or
+       PostgreSQL's parser rejected a SQL statement in the code (`sql_syntax_check`, the second
+       trigger, ADR 0047 §Amendment 2026-11-25), the
        build runs a repair attempt inside this same `execute`, on the same proxy, token and budget:
        a new single-use sandbox run over the previous attempt's sanitised output, told only the
-       measured failing routes (`agent_prompt.compose_repair_intent_text`). The proxy's usage is
+       measured failing routes and rejected statements (`agent_prompt.compose_repair_intent_text`). The proxy's usage is
        drained and read ONCE, after the last attempt (a running read that does not close the token
        serves the limits); publish (one branch, one PR) and the policy gate run ONCE, for the last
        attempt that completed (`_execute_with_repair`, the comment above it says why publish is
@@ -163,6 +165,7 @@ from app.services.preview_smoke import (
     run_smoke_check,
 )
 from app.services.platform_labels import Role, platform_labels
+from app.services.sql_syntax_check import check_sql_syntax, clean_findings
 from app.services.proxy_container import (
     PROXY_IMAGE,
     REQUIRED_PROXY_CAPABILITIES,
@@ -294,6 +297,8 @@ class _Attempt:
     preview_token_hash: str | None = None
     preview_start_failure: str | None = None
     smoke_checks: dict | None = None
+    # `sql_syntax_check` over `publish_dir`: [] = measured, nothing rejected; None = not measured.
+    sql_findings: list[dict] | None = None
     touched_preview: bool = False  # `start_preview` was called for it, which replaces any earlier one
 
 
@@ -937,7 +942,8 @@ class SandboxBuildExecutor:
 
             # The trigger and the limits.
             current = completed[-1]
-            if started >= max_repairs or not has_failing_route(current.smoke_checks):
+            sql_findings = clean_findings(current.sql_findings)
+            if started >= max_repairs or not (has_failing_route(current.smoke_checks) or sql_findings):
                 break
             if peek is None or exceeded:
                 break
@@ -953,7 +959,7 @@ class SandboxBuildExecutor:
                 logger.info("sandbox executor: build %s: no repair attempt, the earlier ones do not fit what is left", build.id)
                 break
             routes = failing_routes(current.smoke_checks)
-            if not routes:
+            if not routes and not sql_findings:
                 break
             try:
                 next_dir = tempfile.mkdtemp(prefix=f"forge-repair-{build.id[:8]}-")
@@ -975,6 +981,7 @@ class SandboxBuildExecutor:
             prompt = compose_repair_intent_text(
                 intent_text=intent_text,
                 failing_routes=[(route["path"], route["status"]) for route in routes],
+                sql_findings=sql_findings,
             )
             agent_dir = next_dir
             started += 1
@@ -983,7 +990,10 @@ class SandboxBuildExecutor:
             # from: the count and the list are written together and never disagree, and a
             # discarded or later-failed attempt keeps its entry exactly as the count keeps it. A new
             # list each time: a JSON column does not see an in-place append.
-            repair_entries.append({"attempt": started, "routes": copy.deepcopy(routes)})
+            entry = {"attempt": started, "routes": copy.deepcopy(routes)}
+            if sql_findings:  # only when there are some: an entry without them is exactly what it was
+                entry["sql"] = copy.deepcopy(sql_findings)
+            repair_entries.append(entry)
             build.repair_attempts = started
             build.repair_routes = copy.deepcopy(repair_entries)
 
@@ -1087,6 +1097,7 @@ class SandboxBuildExecutor:
         attempt.changed_files = copy.deepcopy(build.changed_files)
         attempt.protected_path_drift = copy.deepcopy(build.protected_path_drift)
         attempt.diff_state, attempt.diff = trace.diff_state, copy.deepcopy(trace.diff)
+        attempt.sql_findings = self._measure_sql(build, publish_dir, index)
 
         base_tag = build_tag_for(build.project_id, build.id)
         tag = base_tag if index == 0 else f"{base_tag}-r{index}"
@@ -1136,6 +1147,30 @@ class SandboxBuildExecutor:
         self._run_smoke_check(build)
         self._capture_preview(build, attempt)
         return attempt, None
+
+    @staticmethod
+    def _measure_sql(build: Build, publish_dir: str, index: int) -> list[dict] | None:
+        """The SQL syntax check over an attempt's sanitised tree. Informational like the smoke
+        check: it never fails a build and a check that crashes is "not measured" (None), which
+        triggers nothing. Only the count is logged: the statements are the agent's text."""
+        try:
+            findings = check_sql_syntax(publish_dir)
+        except Exception as exc:  # noqa: BLE001 - a measurement never changes a build's outcome
+            logger.warning(
+                "sandbox executor: build %s attempt %d: the SQL syntax check failed (%s)",
+                build.id,
+                index,
+                type(exc).__name__,
+            )
+            return None
+        if findings:
+            logger.warning(
+                "sandbox executor: build %s attempt %d: PostgreSQL's parser rejected %d SQL statement(s)",
+                build.id,
+                index,
+                len(findings),
+            )
+        return findings
 
     @staticmethod
     def _capture_preview(build: Build, attempt: _Attempt) -> None:

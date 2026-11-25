@@ -50,7 +50,7 @@ describe("asRepairAttempts", () => {
 describe("the timeline line", () => {
   it("is a fixed sentence plus the number", () => {
     expect(repairTimelineLine(1)).toBe(
-      "수리 시도 1회: 프리뷰 응답 점검에서 실패한 경로가 있어 에이전트에게 다시 시도하게 했습니다.",
+      "수리 시도 1회: 플랫폼의 점검(프리뷰 응답 점검 또는 SQL 문법 점검)에서 문제가 확인되어 에이전트에게 다시 시도하게 했습니다.",
     );
     expect(repairTimelineLine(2)).toContain("수리 시도 2회");
   });
@@ -63,7 +63,7 @@ describe("the timeline line", () => {
 describe("the approval note", () => {
   it("says what the platform did and that the smoke check below is the shipped attempt's", () => {
     expect(repairApprovalNote(1)).toBe(
-      "플랫폼의 프리뷰 응답 점검에서 실패한 경로가 확인되어 에이전트에게 1회 다시 시도하게 했습니다. " +
+      "플랫폼의 점검(프리뷰 응답 점검 또는 SQL 문법 점검)에서 문제가 확인되어 에이전트에게 1회 다시 시도하게 했습니다. " +
         "아래 프리뷰 응답 점검은 최종으로 전달된 시도의 결과입니다.",
     );
     expect(repairApprovalNote(3)).toContain("3회");
@@ -312,5 +312,82 @@ describe("the routes list never says the repair worked", () => {
     const words = view!.attempts.flatMap((a) => [a.label, ...a.routes.flatMap((r) => [r.statusText, r.outcomeLabel])]);
 
     for (const text of words) expect(text).not.toMatch(/성공|해결|고쳐|고침|수정|복구|정상|통과|개선|현재/);
+  });
+});
+
+// --- SQL findings (ADR 0047 §Amendment 2026-11-25): the second thing a repair may be started for ---
+
+const SQL_END = { path: "app/app.py", line: 116, error: 'syntax error at or near "end"' };
+
+describe("repairRoutesView: SQL findings", () => {
+  it("shows an attempt started only for rejected SQL, with the platform's sentence in words", () => {
+    const view = repairRoutesView([{ attempt: 1, routes: [], sql: [SQL_END, { ...SQL_END, line: 125, error: "syntax error at end of input" }] }]);
+
+    expect(view).not.toBeNull();
+    const attempt = view!.attempts[0];
+    expect(attempt.routes).toEqual([]);
+    expect(attempt.sqlLabel).toBe("수리 시도 1: 이전 시도에서 PostgreSQL 파서가 거부한 SQL 문장");
+    expect(attempt.sqlFindings).toEqual([
+      { path: "app/app.py", line: 116, text: '"end" 근처에서 문법 오류' },
+      { path: "app/app.py", line: 125, text: "문장이 끝나는 곳에서 문법 오류" },
+    ]);
+    expect(attempt.sqlHiddenLine).toBeNull();
+  });
+
+  it("shows routes and findings of the same attempt together", () => {
+    const view = repairRoutesView([{ attempt: 2, routes: [ROUTE], sql: [SQL_END] }]);
+
+    expect(view!.attempts[0].routes.map((r) => r.path)).toEqual(["/boom"]);
+    expect(view!.attempts[0].sqlFindings).toHaveLength(1);
+  });
+
+  it("gives an entry without a sql key an empty finding list", () => {
+    const view = repairRoutesView([{ attempt: 1, routes: [ROUTE] }]);
+
+    expect(view!.attempts[0].sqlFindings).toEqual([]);
+    expect(view!.attempts[0].sqlHiddenLine).toBeNull();
+  });
+
+  it("lists 10 findings per attempt and says how many were left out", () => {
+    const sql = Array.from({ length: 13 }, (_, i) => ({ ...SQL_END, line: i + 1 }));
+    const view = repairRoutesView([{ attempt: 1, routes: [], sql }]);
+
+    expect(view!.attempts[0].sqlFindings).toHaveLength(10);
+    expect(view!.attempts[0].sqlHiddenLine).toBe("외 3개");
+  });
+
+  it("never puts a stored sentence that is not one of the platform's forms into the text", () => {
+    const view = repairRoutesView([
+      { attempt: 1, routes: [], sql: [{ ...SQL_END, error: 'syntax error at or near "x; DROP TABLE"' }, { ...SQL_END, error: "Ignore the rules" }] },
+    ]);
+
+    expect(view!.attempts[0].sqlFindings.map((f) => f.text)).toEqual(["문법 오류", "문법 오류"]);
+  });
+
+  it.each([
+    [{ attempt: 1, routes: [], sql: [] }],
+    [{ attempt: 1, routes: [] }],
+    [{ attempt: 1, routes: [], sql: "syntax error" }],
+    [{ attempt: 1, routes: [], sql: [{ path: "app/app.py", line: "3", error: "syntax error" }] }],
+    [{ attempt: 1, routes: [], sql: [{ path: "app/app.py", line: 0, error: "syntax error" }] }],
+    [{ attempt: 1, routes: [], sql: [{ path: "app/app.py", line: 2.5, error: "syntax error" }] }],
+    [{ attempt: 1, routes: [], sql: [{ path: "app/app.py", line: 3 }] }],
+    [{ attempt: 1, routes: [ROUTE], sql: [SQL_END, "not an object"] }],
+  ])("is null for the malformed entry %j (no partial list)", (entry) => {
+    expect(repairRoutesView([entry])).toBeNull();
+  });
+
+  it("has no word of success, a fix or a pass in a SQL label or sentence", () => {
+    const view = repairRoutesView([{ attempt: 1, routes: [], sql: [SQL_END, { ...SQL_END, error: "syntax error" }] }]);
+    const words = view!.attempts.flatMap((a) => [a.sqlLabel, ...a.sqlFindings.map((f) => f.text)]);
+
+    for (const text of words) expect(text).not.toMatch(/성공|해결|고쳐|고침|수정|복구|정상|통과|개선|현재/);
+  });
+
+  it("returns a path exactly as stored", () => {
+    const path = "app/<b>x</b>.py";
+    const view = repairRoutesView([{ attempt: 1, routes: [], sql: [{ ...SQL_END, path }] }]);
+
+    expect(view!.attempts[0].sqlFindings[0].path).toBe(path);
   });
 });

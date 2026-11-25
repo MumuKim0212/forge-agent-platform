@@ -40,6 +40,11 @@ dependencies = [
     # `service_data.py` rewrites every admin URL onto `postgresql+psycopg`
     # explicitly rather than depending on that default.
     "psycopg[binary]>=3.1",
+    # ADR 0047 §Amendment 2026-11-25: PostgreSQL's own parser (libpg_query), used by
+    # `services/sql_syntax_check.py` to report SQL a generated service executes that PostgreSQL would
+    # reject as a syntax error. Parses text; connects to nothing. If it cannot be imported the check
+    # reports "not measured" and the build carries on.
+    "pglast>=7.0",
 ]
 
 [project.optional-dependencies]

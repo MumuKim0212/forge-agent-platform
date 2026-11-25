@@ -1053,11 +1053,123 @@ def test_nothing_but_the_measured_routes_is_stored(monkeypatch, build):
 
 
 def test_the_entry_is_written_from_the_failing_routes_list_and_from_nothing_else():
-    """The one write is `repair_entries.append(...)` with the `routes` that `failing_routes(...)` returned
-    (the list the prompt is composed from); no other statement assigns the column."""
+    """The one write is `repair_entries.append(entry)`, where `entry` is made of the `routes` that
+    `failing_routes(...)` returned and the `sql_findings` that `clean_findings(...)` returned (the two
+    lists the prompt is composed from, ADR 0047 §Amendment 2026-11-25); no other statement assigns
+    the column."""
     source = open(sbe.__file__, encoding="utf-8").read()
-    (written,) = [line for line in source.splitlines() if "repair_entries.append(" in line]
-    assert '"routes": copy.deepcopy(routes)' in written
+    lines = source.splitlines()
+    assert [line.strip() for line in lines if "repair_entries.append(" in line] == ["repair_entries.append(entry)"]
+    assert [line.strip() for line in lines if line.strip().startswith("entry = {")] == [
+        'entry = {"attempt": started, "routes": copy.deepcopy(routes)}'
+    ]
+    assert [line.strip() for line in lines if 'entry["sql"]' in line] == ['entry["sql"] = copy.deepcopy(sql_findings)']
     assert source.count("routes = failing_routes(current.smoke_checks)") == 1
+    assert source.count("sql_findings = clean_findings(current.sql_findings)") == 1
     assigned = [line.strip() for line in source.splitlines() if "repair_routes =" in line]
     assert assigned == ["build.repair_routes = copy.deepcopy(repair_entries)"]
+
+
+# --- the second trigger: SQL that PostgreSQL's parser rejects (ADR 0047 §Amendment 2026-11-25) -----------
+
+SQL_BAD = {
+    "app/app.py": (
+        b"from sqlalchemy import text\n"
+        b"def f(s):\n"
+        b'    s.execute(text("SELECT id, end FROM bookings"))\n'
+    )
+}
+SQL_GOOD = {
+    "app/app.py": (
+        b"from sqlalchemy import text\n"
+        b"def f(s):\n"
+        b'    s.execute(text(\'SELECT id, "end" FROM bookings\'))\n'
+    )
+}
+SQL_ENTRY = {"path": "app/app.py", "line": 3, "error": 'syntax error at or near "end"'}
+
+
+def test_a_rejected_statement_starts_a_repair_even_when_every_route_answers(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_GOOD)], smoke=[FIXED])
+
+    result = h.run(build)
+
+    assert result.ok is True, result.summary
+    assert h.adapter_runs() == 2 and build.repair_attempts == 1
+    prompt = h.inputs[1]["intent_text"]
+    assert "<measured-sql-errors>\napp/app.py:3 -> syntax error at or near \"end\"\n</measured-sql-errors>" in prompt
+    assert "<measured-failures>" not in prompt  # no route failed: the shorter prompt
+    assert h.h.publish_calls[0]["files"]["app/app.py"] == SQL_GOOD["app/app.py"]  # the repaired attempt ships
+    assert build.repair_routes == [{"attempt": 1, "routes": [], "sql": [SQL_ENTRY]}]
+
+
+def test_a_failing_route_and_a_rejected_statement_are_told_together_and_stored_together(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_GOOD)], smoke=[BROKEN, FIXED])
+
+    assert h.run(build).ok is True
+
+    prompt = h.inputs[1]["intent_text"]
+    assert prompt.index("<measured-failures>") < prompt.index("<measured-sql-errors>")
+    assert "GET /boom -> 500" in prompt
+    assert build.repair_routes == [
+        {
+            "attempt": 1,
+            "routes": [{"path": "/boom", "status": 500, "outcome": "server_error"}],
+            "sql": [SQL_ENTRY],
+        }
+    ]
+
+
+def test_the_statement_itself_never_reaches_the_repair_prompt(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_GOOD)], smoke=[FIXED])
+
+    assert h.run(build).ok is True
+
+    assert "SELECT id" not in h.inputs[1]["intent_text"] and "bookings" not in h.inputs[1]["intent_text"]
+
+
+def test_with_the_loop_off_a_rejected_statement_changes_nothing(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_GOOD)], smoke=[FIXED], repairs=0)
+
+    assert h.run(build).ok is True
+
+    assert h.adapter_runs() == 1 and build.repair_attempts == 0 and build.repair_routes is None
+
+
+def test_a_statement_still_rejected_after_the_last_repair_ships_that_attempt_without_another(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_BAD)], smoke=[FIXED], repairs=1)
+
+    result = h.run(build)
+
+    assert result.ok is True and h.adapter_runs() == 2 and build.repair_attempts == 1
+    assert build.image_ref == h.tag(build, "-r1")
+
+
+def test_a_check_that_could_not_run_is_not_measured_and_triggers_nothing(monkeypatch, build):
+    monkeypatch.setattr(sbe, "check_sql_syntax", lambda workspace_dir: None)
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD), Run(SQL_GOOD)], smoke=[FIXED])
+
+    assert h.run(build).ok is True
+
+    assert h.adapter_runs() == 1 and build.repair_attempts == 0
+
+
+def test_a_check_that_crashes_never_fails_the_build(monkeypatch, build):
+    def boom(workspace_dir):
+        raise RuntimeError("parser crashed")
+
+    monkeypatch.setattr(sbe, "check_sql_syntax", boom)
+    h = RepairHarness(monkeypatch, [Run(SQL_BAD)], smoke=[FIXED])
+
+    result = h.run(build)
+
+    assert result.ok is True and h.adapter_runs() == 1 and build.repair_attempts == 0
+
+
+def test_a_clean_workspace_stores_an_entry_without_a_sql_key_when_only_a_route_failed(monkeypatch, build):
+    h = RepairHarness(monkeypatch, [Run(A0), Run(A1)], smoke=[BROKEN, FIXED])
+
+    assert h.run(build).ok is True
+
+    (entry,) = build.repair_routes
+    assert "sql" not in entry

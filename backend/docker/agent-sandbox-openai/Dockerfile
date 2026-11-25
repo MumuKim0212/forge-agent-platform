@@ -21,4 +21,21 @@ FROM python:3.11-slim
 
 RUN pip install --no-cache-dir openai-agents==0.23.1 openai==3.28.0
 
+# The template's own dependencies (templates/generic-webtool/Dockerfile), so the agent can import and
+# call the app it writes: without them `import app` fails in this sandbox on `fastapi`, the check the
+# agent is told to run is hollow, and an agent that hits the error rewrites its imports to get past
+# it. Pinned EXACTLY, like the SDKs above, to the versions in backend/constraints.txt (the template
+# itself floats on `>=`; tests/test_agent_sandbox_template_deps.py fails if a template dependency is
+# missing here or a pin falls outside the template's own bound). `uvicorn` is without its extras:
+# nothing is served from this sandbox. `httpx` is what FastAPI's TestClient needs. No database or
+# Redis runs here (ADR 0023): the app imports and connects lazily, so placeholder URLs are enough.
+RUN pip install --no-cache-dir \
+    fastapi==0.142.2 \
+    uvicorn==0.54.0 \
+    sqlalchemy==2.1.3 \
+    alembic==1.20.0 \
+    "psycopg[binary]==3.3.6" \
+    redis==8.1.0 \
+    httpx==0.28.1
+
 WORKDIR /workspace

@@ -163,3 +163,50 @@ def test_the_pending_list_summary_does_not_carry_the_routes(client, db_session, 
 def test_the_eval_run_and_case_schemas_do_not_carry_the_routes():
     for model in (EvalCaseOut, EvalRunOut, EvalRunDetailOut):
         assert "repair_routes" not in model.model_fields, model.__name__
+
+
+# --- SQL findings (ADR 0047 §Amendment 2026-11-25): the second thing a repair may have been started for ---
+
+_SQL = {"path": "app/app.py", "line": 116, "error": 'syntax error at or near "end"'}
+
+
+def test_an_entry_with_sql_findings_is_served_as_stored_including_one_with_no_routes(
+    client, db_session, project_row, seeded_ids  # noqa: F811
+):
+    stored = [
+        {"attempt": 1, "routes": [_GOOD_ROUTE], "sql": [_SQL]},
+        {"attempt": 2, "routes": [], "sql": [_SQL, {**_SQL, "line": 125}]},
+    ]
+
+    detail, timeline, schema = _served_three_ways(client, db_session, project_row, seeded_ids, stored)
+
+    assert detail["repair_routes"] == stored
+    assert timeline["repair_routes"] == stored
+    assert schema["repair_routes"] == stored
+
+
+def test_an_entry_without_findings_is_still_served_without_a_sql_key(client, db_session, project_row, seeded_ids):  # noqa: F811
+    detail, timeline, schema = _served_three_ways(client, db_session, project_row, seeded_ids, STORED)
+
+    for served in (detail, timeline, schema):
+        assert all("sql" not in entry for entry in served["repair_routes"])
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        [{"attempt": 1, "routes": [], "sql": []}],  # neither a route nor a finding
+        [{"attempt": 1, "routes": [], "sql": "syntax error"}],
+        [{"attempt": 1, "routes": [], "sql": [{"path": "app/app.py", "line": "3", "error": "syntax error"}]}],
+        [{"attempt": 1, "routes": [], "sql": [{"path": "app/app.py", "line": 3}]}],
+        [{"attempt": 1, "routes": [], "sql": [{**_SQL, "statement": "SELECT end FROM STATEMENT-MARKER"}]}],
+        [{"attempt": 1, "routes": [_GOOD_ROUTE], "sql": [_SQL, "second finding is not an object"]}],
+    ],
+)
+def test_a_malformed_sql_part_serves_the_whole_value_as_null(client, db_session, project_row, seeded_ids, malformed):  # noqa: F811
+    detail, timeline, schema = _served_three_ways(client, db_session, project_row, seeded_ids, malformed)
+
+    assert detail["repair_routes"] is None
+    assert timeline["repair_routes"] is None
+    assert schema["repair_routes"] is None
+    assert "MARKER" not in str((detail, timeline, schema))

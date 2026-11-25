@@ -198,17 +198,35 @@ export function RepairAttemptsNote({
         <>
           {view.routes.attempts.map((attempt, i) => (
             <div key={i} className="mt-2">
-              <p className={MUTED}>{attempt.label}</p>
-              <ul className="mt-1 list-none space-y-1 p-0 text-sm">
-                {attempt.routes.map((route, j) => (
-                  <li key={j}>
-                    GET <Code>{route.path}</Code>{" "}
-                    <span className="text-slate-600 dark:text-slate-300">{route.statusText}</span>{" "}
-                    <span className="text-slate-600 dark:text-slate-300">{route.outcomeLabel}</span>
-                  </li>
-                ))}
-              </ul>
-              {attempt.hiddenLine && <p className={`mt-1 ${MUTED}`}>{attempt.hiddenLine}</p>}
+              {attempt.routes.length > 0 && (
+                <>
+                  <p className={MUTED}>{attempt.label}</p>
+                  <ul className="mt-1 list-none space-y-1 p-0 text-sm">
+                    {attempt.routes.map((route, j) => (
+                      <li key={j}>
+                        GET <Code>{route.path}</Code>{" "}
+                        <span className="text-slate-600 dark:text-slate-300">{route.statusText}</span>{" "}
+                        <span className="text-slate-600 dark:text-slate-300">{route.outcomeLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {attempt.hiddenLine && <p className={`mt-1 ${MUTED}`}>{attempt.hiddenLine}</p>}
+                </>
+              )}
+              {attempt.sqlFindings.length > 0 && (
+                <>
+                  <p className={attempt.routes.length > 0 ? `mt-2 ${MUTED}` : MUTED}>{attempt.sqlLabel}</p>
+                  <ul className="mt-1 list-none space-y-1 p-0 text-sm">
+                    {attempt.sqlFindings.map((finding, j) => (
+                      <li key={j}>
+                        <Code>{finding.path}</Code> {finding.line}줄{" "}
+                        <span className="text-slate-600 dark:text-slate-300">{finding.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {attempt.sqlHiddenLine && <p className={`mt-1 ${MUTED}`}>{attempt.sqlHiddenLine}</p>}
+                </>
+              )}
             </div>
           ))}
           {view.routes.hiddenLine && <p className={`mt-1 ${MUTED}`}>{view.routes.hiddenLine}</p>}

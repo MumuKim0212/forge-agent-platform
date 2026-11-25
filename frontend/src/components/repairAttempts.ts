@@ -25,7 +25,7 @@ export function shouldShowRepairNote(value: unknown): boolean {
 export function repairTimelineLine(value: unknown): string | null {
   const attempts = asRepairAttempts(value);
   if (attempts === null || !shouldShowRepairNote(attempts)) return null;
-  return `수리 시도 ${attempts}회: 프리뷰 응답 점검에서 실패한 경로가 있어 에이전트에게 다시 시도하게 했습니다.`;
+  return `수리 시도 ${attempts}회: 플랫폼의 점검(프리뷰 응답 점검 또는 SQL 문법 점검)에서 문제가 확인되어 에이전트에게 다시 시도하게 했습니다.`;
 }
 
 export const REPAIR_NOTE_HEADING = "수리 시도";
@@ -36,7 +36,7 @@ export function repairApprovalNote(value: unknown): string | null {
   const attempts = asRepairAttempts(value);
   if (attempts === null || !shouldShowRepairNote(attempts)) return null;
   return (
-    `플랫폼의 프리뷰 응답 점검에서 실패한 경로가 확인되어 에이전트에게 ${attempts}회 다시 시도하게 했습니다. ` +
+    `플랫폼의 점검(프리뷰 응답 점검 또는 SQL 문법 점검)에서 문제가 확인되어 에이전트에게 ${attempts}회 다시 시도하게 했습니다. ` +
     "아래 프리뷰 응답 점검은 최종으로 전달된 시도의 결과입니다."
   );
 }
@@ -72,12 +72,27 @@ export const MAX_REPAIR_ATTEMPTS_SHOWN = 3;
 /** ... and this many routes under each. */
 export const MAX_REPAIR_ROUTES_SHOWN = 20;
 
+/** One SQL statement PostgreSQL's parser rejected: where, and the platform's sentence in words. */
+export interface SqlFindingView {
+  path: string;
+  line: number;
+  text: string;
+}
+
+/** At most this many SQL findings are listed under an attempt (the backend stores at most 10). */
+export const MAX_SQL_FINDINGS_SHOWN = 10;
+
 export interface RepairAttemptRoutesView {
   /** Platform words plus the number: which repair attempt, and that the routes are from the one before. */
   label: string;
   routes: SmokeRouteView[];
   /** `외 N개` when the attempt has more routes than are shown; null otherwise. */
   hiddenLine: string | null;
+  /** Platform words plus the number, for the SQL statements the attempt was started for. */
+  sqlLabel: string;
+  sqlFindings: SqlFindingView[];
+  /** `외 N개` when the attempt has more findings than are shown; null otherwise. */
+  sqlHiddenLine: string | null;
 }
 
 export interface RepairRoutesView {
@@ -96,19 +111,44 @@ function isStoredRoute(value: unknown): value is { path: string; status: number 
   );
 }
 
-function isStoredAttempt(
-  value: unknown,
-): value is { attempt: number; routes: { path: string; status: number | null; outcome: string }[] } {
+function isStoredSql(value: unknown): value is { path: string; line: number; error: string } {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const entry = value as { attempt?: unknown; routes?: unknown };
+  const finding = value as { path?: unknown; line?: unknown; error?: unknown };
   return (
-    typeof entry.attempt === "number" &&
-    Number.isInteger(entry.attempt) &&
-    entry.attempt >= 1 &&
-    Array.isArray(entry.routes) &&
-    entry.routes.length > 0 &&
-    entry.routes.every(isStoredRoute)
+    typeof finding.path === "string" &&
+    typeof finding.line === "number" &&
+    Number.isInteger(finding.line) &&
+    finding.line >= 1 &&
+    typeof finding.error === "string"
   );
+}
+
+type StoredAttempt = {
+  attempt: number;
+  routes: { path: string; status: number | null; outcome: string }[];
+  sql?: { path: string; line: number; error: string }[];
+};
+
+// An entry is a started repair: it has at least one failing route or one rejected SQL statement. `sql`
+// is optional (an entry written before it existed, or with no findings, has none); when present it
+// must be well formed, like everything else here.
+function isStoredAttempt(value: unknown): value is StoredAttempt {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const entry = value as { attempt?: unknown; routes?: unknown; sql?: unknown };
+  if (!(typeof entry.attempt === "number" && Number.isInteger(entry.attempt) && entry.attempt >= 1)) return false;
+  if (!Array.isArray(entry.routes) || !entry.routes.every(isStoredRoute)) return false;
+  if (entry.sql !== undefined && !(Array.isArray(entry.sql) && entry.sql.every(isStoredSql))) return false;
+  return entry.routes.length > 0 || (Array.isArray(entry.sql) && entry.sql.length > 0);
+}
+
+const SQL_NEAR = /^syntax error at or near "([A-Za-z_][A-Za-z0-9_]{0,31})"$/;
+
+/** The platform's fixed SQL sentence in words. A sentence that is not one of its forms is shown as the
+ * plain "문법 오류": nothing stored is interpolated except a bare identifier. */
+export function sqlErrorText(error: string): string {
+  if (error === "syntax error at end of input") return "문장이 끝나는 곳에서 문법 오류";
+  const near = SQL_NEAR.exec(error);
+  return near ? `"${near[1]}" 근처에서 문법 오류` : "문법 오류";
 }
 
 /**
@@ -128,10 +168,20 @@ export function repairRoutesView(value: unknown): RepairRoutesView | null {
       attempts: shown.map((entry) => {
         const routes = entry.routes.slice(0, MAX_REPAIR_ROUTES_SHOWN);
         const omitted = entry.routes.length - routes.length;
+        const stored = entry.sql ?? [];
+        const sql = stored.slice(0, MAX_SQL_FINDINGS_SHOWN);
+        const sqlOmitted = stored.length - sql.length;
         return {
           label: `수리 시도 ${entry.attempt}: 이전 시도에서 실패한 경로`,
           routes: routes.map(smokeRouteView),
           hiddenLine: omitted > 0 ? `외 ${omitted}개` : null,
+          sqlLabel: `수리 시도 ${entry.attempt}: 이전 시도에서 PostgreSQL 파서가 거부한 SQL 문장`,
+          sqlFindings: sql.map((finding) => ({
+            path: finding.path,
+            line: finding.line,
+            text: sqlErrorText(finding.error),
+          })),
+          sqlHiddenLine: sqlOmitted > 0 ? `외 ${sqlOmitted}개` : null,
         };
       }),
       hiddenLine: hiddenAttempts > 0 ? `외 ${hiddenAttempts}회 시도` : null,

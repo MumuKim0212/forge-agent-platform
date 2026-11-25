@@ -137,10 +137,20 @@ export interface SmokeRoute {
   outcome: SmokeOutcome;
 }
 
-// The failing routes one repair attempt was started for (`attempt` is the 1-based repair attempt).
+// One SQL statement PostgreSQL's parser rejected in a build's code: the file (a plain relative path), the
+// line, and one of the platform's fixed sentences. Never the statement itself.
+export interface SqlFinding {
+  path: string;
+  line: number;
+  error: string;
+}
+
+// What one repair attempt was started for (`attempt` is the 1-based repair attempt): the failing routes,
+// and/or the SQL statements the parser rejected (absent when there were none). At least one of the two.
 export interface RepairAttempt {
   attempt: number;
   routes: SmokeRoute[];
+  sql?: SqlFinding[];
 }
 
 export interface SmokeChecks {
