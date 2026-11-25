@@ -1,6 +1,6 @@
 # Forge
 
-**사내 구성원이 자연어로 요청하면 AI 에이전트가 격리된 샌드박스에서 서비스를 만들고, 자동 정책 검사와 승인을 거쳐 실제로 배포하고, 이후 자연어로 수정·운영까지 할 수 있는 사내 개발 플랫폼.**
+**사내 구성원이 자연어로 요청하면 AI 에이전트가 격리된 샌드박스에서 서비스를 만들고, 자동 정책 검사와 승인을 거쳐 실제로 배포, 운영까지 할 수 있는 사내 개발 플랫폼.**
 
 사내 구성원이 "이런 사내 도구가 필요하다"고 말하면, 일회성 프로토타입이 아니라 **소유자가 있고 운영되는 서비스**가 나옵니다. 
 프로젝트의 초점은 **LLM이 만든 검증되지 않은 코드를 어디서, 어떤 권한으로 실행하고, 무엇을 거쳐야 운영에 올라가는가**를 설계하는 데 있습니다.
@@ -30,22 +30,20 @@
 
 > 개발 전용 데모 데이터로 채운 화면입니다. 이름과 링크는 모두 가상입니다.
 
-| 승인 콘솔 | 프로젝트 상세 (배포 탭) |
+| 프로젝트 상세 (배포 탭) | 승인 콘솔 |
 |---|---|
-| ![승인 콘솔](assets/screenshots/approvals.png) | ![프로젝트 상세](assets/screenshots/project-detail.png) |
+| ![프로젝트 상세](assets/screenshots/project-detail.png) | ![승인 콘솔](assets/screenshots/approvals.png) |
 | **관리자: 사용량 · 비용** | **관리자: 배포 상태** |
 | ![사용량과 비용](assets/screenshots/admin-usage-cost.png) | ![배포 상태](assets/screenshots/admin-deployments.png) |
 
 <details>
 <summary>다른 화면 보기</summary>
 
-| 프로젝트 레지스트리 | 새 요청 |
+| 프로젝트 레지스트리 | 프로젝트 상세 (타임라인 탭) |
 |---|---|
-| ![프로젝트 목록](assets/screenshots/projects.png) | ![새 요청](assets/screenshots/new-request.png) |
-| **관리자: 에이전트 엔진 선택** | **관리자: 평가(eval) 실행** |
-| ![에이전트 엔진](assets/screenshots/admin-agent-engine.png) | ![평가](assets/screenshots/admin-evals.png) |
-| **개발 모드 사용자 전환** | **프로젝트 상세 (타임라인 탭)** |
-| ![개발 모드 로그인](assets/screenshots/login-dev-mode.png) | ![프로젝트 타임라인](assets/screenshots/project-detail-timeline.png) |
+| ![프로젝트 목록](assets/screenshots/projects.png) | ![프로젝트 타임라인](assets/screenshots/project-detail-timeline.png) |
+| **새 요청** | **관리자: 평가(eval) 실행** |
+| ![새 요청](assets/screenshots/new-request.png) | ![평가](assets/screenshots/admin-evals.png) |
 
 </details>
 
@@ -134,9 +132,9 @@ L3의 코드는 L4로 직접 갈 수 없습니다. L2가 샌드박스에 작업�
 │   ├── app/
 │   │   ├── main.py, config.py, worker.py, proxy_server.py
 │   │   ├── routers/      프로젝트, 빌드, 배포, 승인, 인증, 관리자 콘솔, eval, 사용량
-│   │   ├── services/     샌드박스 실행, LLM 프록시, 정책 게이트, 배포, 프리뷰,
-│   │   │                 서비스 데이터, reconciler, 워커 lease 등
-│   │   └── models/, schemas/
+│   │   ├── services/     샌드박스 실행, LLM 프록시, 정책 게이트, 배포, 프리뷰 등
+│   │   ├── models/       SQLAlchemy 테이블 (프로젝트, 빌드, 배포, 승인, 정책 판정, 감사 등)
+│   │   └── schemas/      API 요청·응답 Pydantic 스키마
 │   ├── migrations/       Alembic
 │   ├── templates/generic-webtool/   생성 서비스의 골든 패스 템플릿
 │   ├── docker/           agent-sandbox, agent-sandbox-openai, agent-sandbox-stub, llm-proxy
